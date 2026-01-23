@@ -32,7 +32,6 @@ def transcribe_voice(audio_data: bytes, filename: str = "voice.ogg") -> str:
             transcript = client.audio.transcriptions.create(
                 model="whisper-1",
                 file=audio_file,
-                language="pt",  # Portuguese - can be made configurable
             )
         return transcript.text
     finally:

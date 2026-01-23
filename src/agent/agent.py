@@ -80,7 +80,7 @@ def get_db() -> SqliteDb:
 def get_memory_manager() -> MemoryManager:
     """Create a memory manager with custom instructions."""
     return MemoryManager(
-        model=OpenAIChat(id="gpt-4o-mini", api_key=settings.openai_api_key),
+        model=OpenAIChat(id="gpt-5-mini", api_key=settings.openai_api_key),
         db=get_db(),
         additional_instructions="""
         Focus on remembering:
@@ -122,7 +122,7 @@ def create_agent() -> Agent:
     """Create and configure the Minion agent."""
     return Agent(
         model=OpenAIChat(
-            id="gpt-4o",
+            id="gpt-5.2",
             api_key=settings.openai_api_key,
         ),
         tools=[

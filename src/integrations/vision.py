@@ -24,7 +24,7 @@ def analyze_image(image_data: bytes, prompt: str = "Describe this image.") -> st
     base64_image = base64.b64encode(image_data).decode("utf-8")
 
     response = client.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-5.2",
         messages=[
             {
                 "role": "user",

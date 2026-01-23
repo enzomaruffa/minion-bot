@@ -16,8 +16,12 @@ logger = logging.getLogger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 
 
-def get_credentials() -> Optional[Credentials]:
-    """Get or refresh Google Calendar credentials."""
+def get_credentials(headless: bool = False) -> Optional[Credentials]:
+    """Get or refresh Google Calendar credentials.
+    
+    Args:
+        headless: If True, use console-based auth flow (prints URL to visit).
+    """
     creds = None
 
     # Load existing token
@@ -31,13 +35,18 @@ def get_credentials() -> Optional[Credentials]:
         creds.refresh(Request())
     elif not creds or not creds.valid:
         if not settings.google_credentials_path.exists():
-            logger.warning("Google credentials file not found")
+            logger.warning("Google credentials file not found at %s", settings.google_credentials_path)
             return None
 
         flow = InstalledAppFlow.from_client_secrets_file(
             str(settings.google_credentials_path), SCOPES
         )
-        creds = flow.run_local_server(port=0)
+        
+        if headless:
+            # For headless servers - prints URL to visit
+            creds = flow.run_console()
+        else:
+            creds = flow.run_local_server(port=0)
 
     # Save credentials
     if creds:

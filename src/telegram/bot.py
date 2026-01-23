@@ -20,6 +20,7 @@ from src.telegram.commands import (
 from src.config import settings
 from src.agent import chat
 from src.integrations.voice import transcribe_voice
+from src.integrations.vision import extract_task_from_image
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +87,47 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
 
 
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle incoming photo messages."""
+    if not update.message or not update.message.photo:
+        return
+
+    user_id = update.effective_user.id if update.effective_user else None
+    if not user_id or not is_authorized(user_id):
+        await update.message.reply_text("Sorry, you're not authorized to use this bot.")
+        return
+
+    logger.info("Received photo, analyzing...")
+
+    try:
+        # Get the largest photo
+        photo = update.message.photo[-1]
+        file = await context.bot.get_file(photo.file_id)
+        image_data = await file.download_as_bytearray()
+
+        # Analyze image
+        analysis = extract_task_from_image(bytes(image_data))
+        logger.info(f"Image analysis: {analysis[:50]}...")
+
+        # Get caption if any
+        caption = update.message.caption or ""
+
+        # Combine analysis with caption and process
+        message = f"I received an image. Analysis: {analysis}"
+        if caption:
+            message += f"\nCaption: {caption}"
+
+        await update.message.reply_text(f"_Image analysis: {analysis[:200]}..._", parse_mode="Markdown")
+
+        response = await chat(message)
+        await update.message.reply_text(response, parse_mode="Markdown")
+    except Exception as e:
+        logger.exception("Error processing photo")
+        await update.message.reply_text(
+            f"Sorry, I couldn't process that image: {str(e)[:100]}"
+        )
+
+
 def create_application() -> Application:
     """Create and configure the Telegram application."""
     application = Application.builder().token(settings.telegram_bot_token).build()
@@ -105,6 +147,9 @@ def create_application() -> Application:
 
     # Add voice message handler
     application.add_handler(MessageHandler(filters.VOICE, handle_voice))
+
+    # Add photo message handler
+    application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
     return application
 

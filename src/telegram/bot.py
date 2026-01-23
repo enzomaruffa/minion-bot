@@ -1,6 +1,7 @@
 import logging
 
 from telegram import Update
+from telegram.error import BadRequest
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -26,6 +27,18 @@ from src.integrations.voice import transcribe_voice
 from src.integrations.vision import extract_task_from_image
 
 logger = logging.getLogger(__name__)
+
+
+async def safe_reply(message, text: str) -> None:
+    """Reply with Markdown, falling back to plain text if parsing fails."""
+    try:
+        await message.reply_text(text, parse_mode="Markdown")
+    except BadRequest as e:
+        if "Can't parse entities" in str(e):
+            logger.warning(f"Markdown parse failed, sending as plain text: {e}")
+            await message.reply_text(text)
+        else:
+            raise
 
 
 def is_authorized(user_id: int) -> bool:
@@ -54,7 +67,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     try:
         response = await chat(user_message)
-        await update.message.reply_text(response, parse_mode="Markdown")
+        await safe_reply(update.message, response)
     except Exception as e:
         logger.exception("Error processing message")
         await update.message.reply_text(
@@ -85,10 +98,10 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         logger.info(f"Transcribed: {transcript[:50]}...")
 
         # Send transcript and process with agent
-        await update.message.reply_text(f"_Heard: {transcript}_", parse_mode="Markdown")
+        await safe_reply(update.message, f"_Heard: {transcript}_")
 
         response = await chat(transcript)
-        await update.message.reply_text(response, parse_mode="Markdown")
+        await safe_reply(update.message, response)
     except Exception as e:
         logger.exception("Error processing voice message")
         await update.message.reply_text(
@@ -126,10 +139,10 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if caption:
             message += f"\nCaption: {caption}"
 
-        await update.message.reply_text(f"_Image analysis: {analysis[:200]}..._", parse_mode="Markdown")
+        await safe_reply(update.message, f"_Image analysis: {analysis[:200]}..._")
 
         response = await chat(message)
-        await update.message.reply_text(response, parse_mode="Markdown")
+        await safe_reply(update.message, response)
     except Exception as e:
         logger.exception("Error processing photo")
         await update.message.reply_text(
@@ -185,8 +198,18 @@ async def send_message(text: str) -> None:
     from telegram import Bot
 
     bot = Bot(token=settings.telegram_bot_token)
-    await bot.send_message(
-        chat_id=settings.telegram_user_id,
-        text=text,
-        parse_mode="Markdown",
-    )
+    try:
+        await bot.send_message(
+            chat_id=settings.telegram_user_id,
+            text=text,
+            parse_mode="Markdown",
+        )
+    except BadRequest as e:
+        if "Can't parse entities" in str(e):
+            logger.warning(f"Markdown parse failed in send_message, sending plain: {e}")
+            await bot.send_message(
+                chat_id=settings.telegram_user_id,
+                text=text,
+            )
+        else:
+            raise

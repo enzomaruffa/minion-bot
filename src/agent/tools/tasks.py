@@ -78,7 +78,10 @@ def add_tasks(tasks: list[dict]) -> str:
         created_ids.append(task.id)
 
     session.close()
-    return f"Created {len(created_ids)} task(s) with IDs: {created_ids}"
+    
+    if len(created_ids) == 1:
+        return f"✓ Created task <code>#{created_ids[0]}</code>"
+    return f"✓ Created {len(created_ids)} tasks: {', '.join(f'<code>#{id}</code>' for id in created_ids)}"
 
 
 def update_task_tool(
@@ -140,17 +143,18 @@ def update_task_tool(
     session.close()
 
     if not task:
-        return f"Task {task_id} not found."
+        return f"Task <code>#{task_id}</code> not found"
 
-    return f"Updated task {task_id}: {task.title}"
+    return f"✓ Updated <code>#{task_id}</code> <i>{task.title}</i>"
 
 
 def _format_task_line(task: Task, indent: int = 0) -> str:
     """Format a single task line with optional indentation."""
-    prefix = "  └─ " if indent > 0 else ""
+    prefix = "  └ " if indent > 0 else "• "
     project_emoji = task.project.emoji + " " if task.project else ""
-    due = f" (due: {task.due_date.strftime('%Y-%m-%d')})" if task.due_date else ""
-    return f"{prefix}#{task.id}: {project_emoji}{task.title} [{task.status.value}]{due}"
+    due = f" <i>{task.due_date.strftime('%b %d')}</i>" if task.due_date else ""
+    status_icon = {"todo": "⬜", "in_progress": "🔄", "done": "✅", "cancelled": "❌"}.get(task.status.value, "")
+    return f"{prefix}<code>#{task.id}</code> {project_emoji}{task.title}{due} {status_icon}"
 
 
 def _format_task_with_subtasks(task: Task, session, indent: int = 0) -> list[str]:

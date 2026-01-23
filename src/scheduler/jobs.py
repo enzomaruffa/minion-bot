@@ -178,7 +178,7 @@ async def proactive_intelligence() -> None:
         upcoming_contacts = list_upcoming_birthdays(session, within_days=7)
         if upcoming_contacts:
             today = now.date()
-            lines = ["🎂 **Upcoming Birthdays:**"]
+            lines = ["<b>🎂 Upcoming Birthdays</b>"]
             for contact in upcoming_contacts:
                 if contact.birthday:
                     bday = contact.birthday.date() if hasattr(contact.birthday, 'date') else contact.birthday
@@ -186,22 +186,22 @@ async def proactive_intelligence() -> None:
                     if this_year_bday < today:
                         this_year_bday = bday.replace(year=today.year + 1)
                     days_until = (this_year_bday - today).days
-                    
+
                     if days_until == 0:
-                        when = "TODAY!"
+                        when = "🔴 TODAY!"
                     elif days_until == 1:
-                        when = "tomorrow"
+                        when = "🟠 tomorrow"
                     else:
                         when = f"in {days_until} days"
-                    
-                    lines.append(f"  • {contact.name} - {when}")
+
+                    lines.append(f"  • {contact.name} — {when}")
             messages.append("\n".join(lines))
-        
+
         session.close()
-        
+
         # Send combined message if there are any nudges
         if messages:
-            combined = "🤖 **Proactive Check-in**\n\n" + "\n\n".join(messages)
+            combined = "<b>🤖 Proactive Check-in</b>\n\n" + "\n\n".join(messages)
             await send_message(combined)
             logger.info(f"Sent proactive intelligence message with {len(messages)} nudges")
         else:

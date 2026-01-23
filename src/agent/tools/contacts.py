@@ -64,18 +64,18 @@ def show_contacts() -> str:
         session.close()
         return "No contacts saved."
 
-    lines = ["**Contacts:**"]
+    lines = ["<b>📇 Contacts</b>"]
     for contact in contacts:
         # Count linked tasks
         tasks = get_tasks_by_contact(session, contact.id)
         task_count = len(tasks)
 
-        alias_info = f" (aka {contact.aliases})" if contact.aliases else ""
+        alias_info = f" <i>(aka {contact.aliases})</i>" if contact.aliases else ""
         bday_info = f" 🎂 {contact.birthday.strftime('%B %d')}" if contact.birthday else ""
         task_info = f" [{task_count} task{'s' if task_count != 1 else ''}]" if task_count > 0 else ""
         notes_info = f" - {contact.notes}" if contact.notes else ""
 
-        lines.append(f"  #{contact.id}: {contact.name}{alias_info}{bday_info}{task_info}{notes_info}")
+        lines.append(f"  • <b>{contact.name}</b>{alias_info}{bday_info}{task_info}{notes_info}")
 
     session.close()
     return "\n".join(lines)
@@ -97,7 +97,7 @@ def upcoming_birthdays(days: int = 14) -> str:
     if not contacts:
         return f"No birthdays in the next {days} days."
 
-    lines = [f"**Upcoming Birthdays (next {days} days):**"]
+    lines = [f"<b>🎂 Upcoming Birthdays</b> <i>(next {days} days)</i>"]
     today = datetime.now().date()
 
     for contact in contacts:
@@ -109,13 +109,15 @@ def upcoming_birthdays(days: int = 14) -> str:
             days_until = (this_year_bday - today).days
 
             if days_until == 0:
-                when = "TODAY!"
+                when = "🔴 TODAY!"
             elif days_until == 1:
-                when = "tomorrow"
+                when = "🟠 tomorrow"
+            elif days_until <= 7:
+                when = f"🟡 in {days_until} days"
             else:
                 when = f"in {days_until} days"
 
-            lines.append(f"  🎂 {contact.name} - {this_year_bday.strftime('%B %d')} ({when})")
+            lines.append(f"  • <b>{contact.name}</b> — {this_year_bday.strftime('%B %d')} ({when})")
 
     return "\n".join(lines)
 
@@ -212,10 +214,10 @@ def get_contact_tasks(contact_id: int) -> str:
     if not tasks:
         return f"No tasks linked to {contact.name}."
 
-    lines = [f"**Tasks for {contact.name}:**"]
+    lines = [f"<b>Tasks for {contact.name}</b>"]
     for task in tasks:
         project_emoji = task.project.emoji + " " if task.project else ""
-        due = f" (due: {task.due_date.strftime('%Y-%m-%d')})" if task.due_date else ""
-        lines.append(f"  #{task.id}: {project_emoji}{task.title} [{task.status.value}]{due}")
+        due = f" <i>(due: {task.due_date.strftime('%Y-%m-%d')})</i>" if task.due_date else ""
+        lines.append(f"  • <code>#{task.id}</code>: {project_emoji}{task.title} [{task.status.value}]{due}")
 
     return "\n".join(lines)

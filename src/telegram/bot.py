@@ -35,12 +35,12 @@ logger = logging.getLogger(__name__)
 
 
 async def safe_reply(message, text: str) -> None:
-    """Reply with Markdown, falling back to plain text if parsing fails."""
+    """Reply with HTML, falling back to plain text if parsing fails."""
     try:
-        await message.reply_text(text, parse_mode="Markdown")
+        await message.reply_text(text, parse_mode="HTML")
     except BadRequest as e:
         if "Can't parse entities" in str(e):
-            logger.warning(f"Markdown parse failed, sending as plain text: {e}")
+            logger.warning(f"HTML parse failed, sending as plain text: {e}")
             await message.reply_text(text)
         else:
             raise
@@ -103,7 +103,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         logger.info(f"Transcribed: {transcript[:50]}...")
 
         # Send transcript and process with agent
-        await safe_reply(update.message, f"_Heard: {transcript}_")
+        await safe_reply(update.message, f"<i>Heard: {transcript}</i>")
 
         # Add transcription context for the agent
         agent_message = (
@@ -149,7 +149,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if caption:
             message += f"\nCaption: {caption}"
 
-        await safe_reply(update.message, f"_Image analysis: {analysis[:200]}..._")
+        await safe_reply(update.message, f"<i>Image analysis: {analysis[:200]}...</i>")
 
         response = await chat(message)
         await safe_reply(update.message, response)
@@ -223,11 +223,11 @@ async def send_message(text: str) -> None:
         await bot.send_message(
             chat_id=settings.telegram_user_id,
             text=text,
-            parse_mode="Markdown",
+            parse_mode="HTML",
         )
     except BadRequest as e:
         if "Can't parse entities" in str(e):
-            logger.warning(f"Markdown parse failed in send_message, sending plain: {e}")
+            logger.warning(f"HTML parse failed in send_message, sending plain: {e}")
             await bot.send_message(
                 chat_id=settings.telegram_user_id,
                 text=text,

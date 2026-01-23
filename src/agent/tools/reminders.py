@@ -31,11 +31,12 @@ def set_reminder(
     remind_dt = parse_date(remind_at)
     if not remind_dt:
         session.close()
-        return f"Could not parse date: {remind_at}"
+        return f"Could not parse date: <code>{remind_at}</code>"
     reminder = create_reminder(session, message, remind_dt, task_id)
     session.close()
 
-    return f"Reminder #{reminder.id} set for {remind_dt.strftime('%Y-%m-%d %H:%M')}: {message}"
+    task_info = f" <i>(linked to task <code>#{task_id}</code>)</i>" if task_id else ""
+    return f"⏰ Reminder <code>#{reminder.id}</code> set for <b>{remind_dt.strftime('%b %d, %H:%M')}</b>{task_info}\n<i>{message}</i>"
 
 
 def list_reminders(include_delivered: bool = False) -> str:
@@ -52,15 +53,14 @@ def list_reminders(include_delivered: bool = False) -> str:
     session.close()
 
     if not reminders:
-        return "No reminders found." if include_delivered else "No pending reminders."
+        return "<i>No pending reminders</i>" if not include_delivered else "<i>No reminders found</i>"
 
-    lines = []
+    lines = ["<b>⏰ Reminders</b>", ""]
     for rem in reminders:
-        task_info = f" (task #{rem.task_id})" if rem.task_id else ""
+        task_info = f" → task <code>#{rem.task_id}</code>" if rem.task_id else ""
         status = " ✓" if rem.delivered else ""
-        lines.append(
-            f"#{rem.id}: {rem.remind_at.strftime('%Y-%m-%d %H:%M')}: {rem.message}{task_info}{status}"
-        )
+        time_str = rem.remind_at.strftime("%b %d, %H:%M")
+        lines.append(f"• <code>#{rem.id}</code> {time_str}{status}\n  <i>{rem.message}</i>{task_info}")
 
     return "\n".join(lines)
 
@@ -79,5 +79,5 @@ def cancel_reminder(reminder_id: int) -> str:
     session.close()
 
     if success:
-        return f"Cancelled reminder #{reminder_id}."
-    return f"Reminder #{reminder_id} not found."
+        return f"✓ Cancelled reminder <code>#{reminder_id}</code>"
+    return f"Reminder <code>#{reminder_id}</code> not found"

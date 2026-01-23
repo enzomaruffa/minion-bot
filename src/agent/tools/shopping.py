@@ -161,7 +161,7 @@ def show_list(list_type: Optional[str] = None, include_checked: bool = False) ->
             continue
 
         emoji = _get_list_emoji(item_type)
-        lines.append(f"\n{emoji} **{item_type.value.title()}**")
+        lines.append(f"\n{emoji} <b>{item_type.value.title()}</b>")
 
         for item in grouped[item_type]:
             checkbox = "☑️" if item.checked else "⬜"
@@ -173,7 +173,7 @@ def show_list(list_type: Optional[str] = None, include_checked: bool = False) ->
             else:
                 recipient_info = ""
             notes_info = f" - {item.notes}" if item.notes else ""
-            lines.append(f"  {checkbox} #{item.id}: {item.name}{recipient_info}{notes_info}")
+            lines.append(f"  {checkbox} <code>#{item.id}</code>: {item.name}{recipient_info}{notes_info}")
 
     return "\n".join(lines).strip()
 
@@ -308,10 +308,10 @@ def show_gifts_for_contact(contact_name: str, include_checked: bool = False) -> 
         if not gifts:
             return f"No unchecked gift ideas for {contact.name}."
 
-    lines = [f"🎁 **Gift ideas for {contact.name}:**"]
+    lines = [f"<b>🎁 Gift ideas for {contact.name}</b>"]
     for item in gifts:
         checkbox = "☑️" if item.checked else "⬜"
         notes_info = f" - {item.notes}" if item.notes else ""
-        lines.append(f"  {checkbox} #{item.id}: {item.name}{notes_info}")
+        lines.append(f"  {checkbox} <code>#{item.id}</code>: {item.name}{notes_info}")
 
     return "\n".join(lines)

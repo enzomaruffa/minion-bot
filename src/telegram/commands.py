@@ -36,21 +36,21 @@ async def tasks_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     in_progress = list_tasks(status="in_progress")
     todo = list_tasks(status="todo")
 
-    parts = ["📋 *Tasks*", ""]
-    
+    parts = ["<b>📋 Tasks</b>", ""]
+
     if in_progress and in_progress != "No tasks found.":
-        parts.append("🔄 *In Progress*")
+        parts.append("<b>🔄 In Progress</b>")
         parts.append(in_progress)
         parts.append("")
-    
+
     if todo and todo != "No tasks found.":
-        parts.append("📝 *To Do*")
+        parts.append("<b>📝 To Do</b>")
         parts.append(todo)
 
     if len(parts) == 2:  # Only header
-        parts.append("_No pending tasks!_ 🎉")
+        parts.append("<i>No pending tasks!</i> 🎉")
 
-    await update.message.reply_text("\n".join(parts), parse_mode="Markdown")
+    await update.message.reply_text("\n".join(parts), parse_mode="HTML")
 
 
 async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -65,9 +65,9 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     today_str = datetime.now().strftime("%A, %b %d")
     result = get_agenda()
-    
-    formatted = f"📅 *{today_str}*\n\n{result}"
-    await update.message.reply_text(formatted, parse_mode="Markdown")
+
+    formatted = f"📅 <b>{today_str}</b>\n\n{result}"
+    await update.message.reply_text(formatted, parse_mode="HTML")
 
 
 async def calendar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -88,24 +88,24 @@ async def calendar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     session.close()
 
     if not events:
-        await update.message.reply_text("📆 _No events in the next 7 days._", parse_mode="Markdown")
+        await update.message.reply_text("📆 <i>No events in the next 7 days.</i>", parse_mode="HTML")
         return
 
-    lines = ["📆 *Upcoming Events*", ""]
-    
+    lines = ["<b>📆 Upcoming Events</b>", ""]
+
     current_day = None
     for event in events:
         event_day = event.start_time.strftime("%A, %b %d")
         if event_day != current_day:
             if current_day is not None:
                 lines.append("")
-            lines.append(f"*{event_day}*")
+            lines.append(f"<b>{event_day}</b>")
             current_day = event_day
-        
+
         time_str = event.start_time.strftime("%H:%M")
         lines.append(f"  {time_str} — {event.title}")
 
-    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+    await update.message.reply_text("\n".join(lines), parse_mode="HTML")
 
 
 async def auth_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -136,18 +136,18 @@ async def auth_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     _awaiting_auth_code = True
     await update.message.reply_text(
-        "🔗 *Google Calendar Authorization*\n\n"
-        f"1. [Tap here to authorize]({auth_url})\n\n"
+        "<b>🔗 Google Calendar Authorization</b>\n\n"
+        f'1. <a href="{auth_url}">Tap here to authorize</a>\n\n'
         "2. Sign in with your Google account and allow access\n\n"
-        "3. You'll see a page that *won't load* - this is expected!\n\n"
-        "4. *On iPhone:* Tap the URL bar at the top to see the full URL\n"
-        "   *On desktop:* Look at the address bar\n\n"
-        "5. Find `code=` in the URL and copy everything after it until the `&`\n"
-        "   Example URL: `localhost/?code=4/0AeanS0r...&scope=...`\n"
-        "   Copy: `4/0AeanS0r...` (the part between `code=` and `&`)\n\n"
+        "3. You'll see a page that <b>won't load</b> - this is expected!\n\n"
+        "4. <b>On iPhone:</b> Tap the URL bar at the top to see the full URL\n"
+        "   <b>On desktop:</b> Look at the address bar\n\n"
+        "5. Find <code>code=</code> in the URL and copy everything after it until the <code>&amp;</code>\n"
+        "   Example URL: <code>localhost/?code=4/0AeanS0r...&amp;scope=...</code>\n"
+        "   Copy: <code>4/0AeanS0r...</code> (the part between <code>code=</code> and <code>&amp;</code>)\n\n"
         "6. Send that code back to me here\n\n"
-        "_Waiting for your code..._",
-        parse_mode="Markdown",
+        "<i>Waiting for your code...</i>",
+        parse_mode="HTML",
         disable_web_page_preview=True,
     )
 
@@ -192,13 +192,13 @@ async def contacts_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await update.message.reply_text("📇 No contacts saved yet.")
         return
 
-    lines = ["📇 *Contacts*", ""]
+    lines = ["<b>📇 Contacts</b>", ""]
     for contact in contacts:
-        alias_info = f" _{contact.aliases}_" if contact.aliases else ""
+        alias_info = f" <i>{contact.aliases}</i>" if contact.aliases else ""
         bday_info = f" 🎂 {contact.birthday.strftime('%b %d')}" if contact.birthday else ""
-        lines.append(f"• *{contact.name}*{alias_info}{bday_info}")
+        lines.append(f"• <b>{contact.name}</b>{alias_info}{bday_info}")
 
-    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+    await update.message.reply_text("\n".join(lines), parse_mode="HTML")
 
 
 async def birthdays_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -219,7 +219,7 @@ async def birthdays_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await update.message.reply_text("🎂 No birthdays in the next 30 days.")
         return
 
-    lines = ["🎂 *Upcoming Birthdays*", ""]
+    lines = ["<b>🎂 Upcoming Birthdays</b>", ""]
     today = datetime.now().date()
 
     for contact in contacts:
@@ -239,39 +239,39 @@ async def birthdays_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             else:
                 when = f"in {days_until} days"
 
-            lines.append(f"• *{contact.name}* — {this_year_bday.strftime('%b %d')} ({when})")
+            lines.append(f"• <b>{contact.name}</b> — {this_year_bday.strftime('%b %d')} ({when})")
 
-    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+    await update.message.reply_text("\n".join(lines), parse_mode="HTML")
 
 
 def _format_shopping_list(items, list_type: ShoppingListType, emoji: str, title: str) -> str:
     """Format a shopping list for display."""
     filtered = [i for i in items if i.shopping_list.list_type == list_type]
-    
+
     if not filtered:
-        return f"{emoji} *{title}*\n_Empty_"
+        return f"{emoji} <b>{title}</b>\n<i>Empty</i>"
 
     unchecked = [i for i in filtered if not i.checked]
     checked = [i for i in filtered if i.checked]
 
-    lines = [f"{emoji} *{title}*", ""]
-    
+    lines = [f"{emoji} <b>{title}</b>", ""]
+
     for item in unchecked:
         recipient = ""
         if item.contact:
             recipient = f" → {item.contact.name}"
         elif item.recipient:
             recipient = f" → {item.recipient}"
-        notes = f" _({item.notes})_" if item.notes else ""
+        notes = f" <i>({item.notes})</i>" if item.notes else ""
         lines.append(f"⬜ {item.name}{recipient}{notes}")
 
     if checked:
         lines.append("")
-        lines.append(f"_Checked ({len(checked)}):_")
+        lines.append(f"<i>Checked ({len(checked)}):</i>")
         for item in checked[:3]:  # Show max 3 checked
-            lines.append(f"  ☑️ ~{item.name}~")
+            lines.append(f"  ☑️ <s>{item.name}</s>")
         if len(checked) > 3:
-            lines.append(f"  _...and {len(checked) - 3} more_")
+            lines.append(f"  <i>...and {len(checked) - 3} more</i>")
 
     return "\n".join(lines)
 
@@ -291,7 +291,7 @@ async def groceries_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     result = _format_shopping_list(items, ShoppingListType.GROCERIES, "🛒", "Groceries")
     session.close()
 
-    await update.message.reply_text(result, parse_mode="Markdown")
+    await update.message.reply_text(result, parse_mode="HTML")
 
 
 async def gifts_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -309,7 +309,7 @@ async def gifts_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     result = _format_shopping_list(items, ShoppingListType.GIFTS, "🎁", "Gift Ideas")
     session.close()
 
-    await update.message.reply_text(result, parse_mode="Markdown")
+    await update.message.reply_text(result, parse_mode="HTML")
 
 
 async def wishlist_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -327,7 +327,7 @@ async def wishlist_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     result = _format_shopping_list(items, ShoppingListType.WISHLIST, "✨", "Wishlist")
     session.close()
 
-    await update.message.reply_text(result, parse_mode="Markdown")
+    await update.message.reply_text(result, parse_mode="HTML")
 
 
 async def lists_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -352,8 +352,8 @@ async def lists_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         parts.append(_format_shopping_list(all_items, lt, emoji, title))
     
     session.close()
-    
-    await update.message.reply_text("\n\n".join(parts), parse_mode="Markdown")
+
+    await update.message.reply_text("\n\n".join(parts), parse_mode="HTML")
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -363,29 +363,29 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     calendar_status = "✓" if is_calendar_connected() else "✗ (/auth)"
 
-    help_text = f"""📋 *Commands*
+    help_text = f"""<b>📋 Commands</b>
 
-*Tasks & Agenda*
+<b>Tasks &amp; Agenda</b>
 /tasks — pending tasks
 /today — today's agenda
 /calendar — upcoming events
 
-*Shopping Lists*
+<b>Shopping Lists</b>
 /lists — all lists
 /groceries — grocery items
 /gifts — gift ideas
 /wishlist — wishlist
 
-*Contacts*
+<b>Contacts</b>
 /contacts — all contacts
 /birthdays — upcoming birthdays
 
-*Settings*
+<b>Settings</b>
 /auth — connect Google Calendar
 /help — this help
 
 ─────────────────
 📅 Calendar: {calendar_status}
 
-_Or just chat with me!_"""
-    await update.message.reply_text(help_text, parse_mode="Markdown")
+<i>Or just chat with me!</i>"""
+    await update.message.reply_text(help_text, parse_mode="HTML")

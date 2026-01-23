@@ -64,39 +64,40 @@ def get_agenda(date: Optional[str] = None) -> str:
     ]
 
     # Format output while session is still open (to access relationships)
-    lines = [f"Agenda for {target_date.strftime('%A, %B %d, %Y')}"]
-    lines.append("=" * 40)
+    lines = []
 
     # Calendar events
     if events:
-        lines.append("\nCalendar Events:")
+        lines.append("<b>📆 Events</b>")
         for event in events:
             time_str = event.start_time.strftime("%H:%M")
             end_str = event.end_time.strftime("%H:%M")
-            lines.append(f"  {time_str}-{end_str}: {event.title}")
+            lines.append(f"• {time_str}–{end_str}  {event.title}")
     else:
-        lines.append("\nNo calendar events.")
+        lines.append("<i>No calendar events</i>")
 
     # Tasks due today
+    lines.append("")
     if tasks_due:
-        lines.append("\nTasks Due Today:")
+        lines.append("<b>📋 Due Today</b>")
         for task in tasks_due:
             project_emoji = task.project.emoji + " " if task.project else ""
-            priority = f"[{task.priority.value}]" if task.priority else ""
-            lines.append(f"  #{task.id}: {project_emoji}{task.title} {priority}")
+            lines.append(f"• <code>#{task.id}</code> {project_emoji}{task.title}")
     else:
-        lines.append("\nNo tasks due today.")
+        lines.append("<i>No tasks due today</i>")
 
     # Reminders
     if today_reminders:
-        lines.append("\nReminders:")
+        lines.append("")
+        lines.append("<b>⏰ Reminders</b>")
         for rem in today_reminders:
             time_str = rem.remind_at.strftime("%H:%M")
-            lines.append(f"  {time_str}: {rem.message}")
+            lines.append(f"• {time_str}  {rem.message}")
 
     # Pending tasks (backlog)
     if pending_tasks:
-        lines.append(f"\nBacklog ({len(pending_tasks)} pending tasks)")
+        lines.append("")
+        lines.append(f"<i>📝 {len(pending_tasks)} tasks in backlog</i>")
 
     session.close()
 

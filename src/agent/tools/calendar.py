@@ -23,12 +23,12 @@ def test_calendar() -> str:
     
     if result["ok"]:
         return (
-            f"✓ Calendar connected!\n"
-            f"Calendar: {result['calendar_name']}\n"
-            f"Timezone: {result['timezone']}"
+            f"✓ <b>Calendar connected</b>\n"
+            f"• Calendar: <i>{result['calendar_name']}</i>\n"
+            f"• Timezone: <code>{result['timezone']}</code>"
         )
     else:
-        return f"✗ Calendar not connected: {result['error']}"
+        return f"✗ Calendar not connected: <i>{result['error']}</i>"
 
 
 def create_calendar_event(
@@ -76,12 +76,13 @@ def create_calendar_event(
     
     if result:
         return (
-            f"✓ Event created: {title}\n"
-            f"When: {start_dt.strftime('%a %b %d, %H:%M')} - {end_dt.strftime('%H:%M')}\n"
-            f"ID: {result['id']}"
+            f"✓ <b>Event created</b>\n"
+            f"• {title}\n"
+            f"• {start_dt.strftime('%a %b %d, %H:%M')} – {end_dt.strftime('%H:%M')}\n"
+            f"• ID: <code>{result['id'][:12]}</code>"
         )
     else:
-        return "Failed to create event. Check calendar connection."
+        return "✗ Failed to create event. Check calendar connection."
 
 
 def update_calendar_event(
@@ -159,10 +160,10 @@ def list_calendar_events(days: int = 7) -> str:
     events = list_upcoming_events(days=days)
     
     if not events:
-        return f"No events in the next {days} days."
-    
-    lines = [f"📅 Upcoming events ({days} days):"]
-    
+        return f"<i>No events in the next {days} days</i>"
+
+    lines = [f"<b>📆 Events</b> <i>({days} days)</i>", ""]
+
     current_date = None
     for event in events:
         # Parse start time
@@ -175,19 +176,21 @@ def list_calendar_events(days: int = 7) -> str:
             start = datetime.fromisoformat(start_data.get("date", ""))
             time_str = "All day"
             is_all_day = True
-        
+
         # Group by date
         date_str = start.strftime("%a %b %d")
         if date_str != current_date:
+            if current_date is not None:
+                lines.append("")
             current_date = date_str
-            lines.append(f"\n**{date_str}**")
-        
+            lines.append(f"<b>{date_str}</b>")
+
         title = event.get("summary", "Untitled")
         event_id = event.get("id", "")[:12]  # Truncate ID for display
-        
+
         if is_all_day:
-            lines.append(f"  • {title} (all day) [{event_id}]")
+            lines.append(f"• {title} <i>(all day)</i> <code>{event_id}</code>")
         else:
-            lines.append(f"  • {time_str} - {title} [{event_id}]")
-    
+            lines.append(f"• {time_str}  {title} <code>{event_id}</code>")
+
     return "\n".join(lines)

@@ -89,6 +89,7 @@ def update_task_tool(
     priority: Optional[str] = None,
     due_date: Optional[str] = None,
     project: Optional[str] = None,
+    contact: Optional[str] = None,
 ) -> str:
     """Update an existing task.
 
@@ -100,6 +101,7 @@ def update_task_tool(
         priority: New priority (low/medium/high/urgent).
         due_date: New due date (natural language like "tomorrow" or ISO format).
         project: Project name (Work/Personal/Health/Finance/Social/Learning).
+        contact: Contact name to link this task to.
 
     Returns:
         Confirmation message or error if task not found.
@@ -117,6 +119,13 @@ def update_task_tool(
         if proj:
             project_id = proj.id
 
+    # Resolve contact by name
+    contact_id = None
+    if contact:
+        c = get_contact_by_name(session, contact)
+        if c:
+            contact_id = c.id
+
     task = update_task(
         session,
         task_id,
@@ -126,6 +135,7 @@ def update_task_tool(
         priority=priority_enum,
         due_date=due_dt,
         project_id=project_id,
+        contact_id=contact_id,
     )
     session.close()
 

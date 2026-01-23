@@ -27,18 +27,26 @@ def get_auth_url() -> Optional[str]:
     """
     global _pending_flow
     
+    logger.info(f"Checking for credentials at: {settings.google_credentials_path}")
+    logger.info(f"Credentials file exists: {settings.google_credentials_path.exists()}")
+    
     if not settings.google_credentials_path.exists():
         logger.warning("Google credentials file not found at %s", settings.google_credentials_path)
         return None
     
-    _pending_flow = InstalledAppFlow.from_client_secrets_file(
-        str(settings.google_credentials_path), 
-        SCOPES,
-        redirect_uri="urn:ietf:wg:oauth:2.0:oob"  # Manual copy/paste flow
-    )
-    
-    auth_url, _ = _pending_flow.authorization_url(prompt="consent")
-    return auth_url
+    try:
+        _pending_flow = InstalledAppFlow.from_client_secrets_file(
+            str(settings.google_credentials_path), 
+            SCOPES,
+            redirect_uri="urn:ietf:wg:oauth:2.0:oob"  # Manual copy/paste flow
+        )
+        
+        auth_url, _ = _pending_flow.authorization_url(prompt="consent")
+        logger.info("Generated OAuth URL successfully")
+        return auth_url
+    except Exception as e:
+        logger.exception(f"Failed to create auth flow: {e}")
+        return None
 
 
 def complete_auth(code: str) -> bool:
@@ -52,6 +60,8 @@ def complete_auth(code: str) -> bool:
     """
     global _pending_flow
     
+    logger.info(f"Completing auth with code: {code[:20]}...")
+    
     if not _pending_flow:
         logger.error("No pending auth flow. Call get_auth_url first.")
         return False
@@ -61,11 +71,12 @@ def complete_auth(code: str) -> bool:
         creds = _pending_flow.credentials
         
         # Save credentials
+        logger.info(f"Saving token to: {settings.google_token_path}")
         settings.google_token_path.parent.mkdir(parents=True, exist_ok=True)
         with open(settings.google_token_path, "w") as token:
             token.write(creds.to_json())
         
-        logger.info("Google Calendar authorization successful")
+        logger.info("Google Calendar authorization successful, token saved")
         _pending_flow = None
         return True
     except Exception as e:

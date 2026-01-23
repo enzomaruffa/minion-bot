@@ -1,0 +1,11 @@
+services:
+  minion:
+    build: .
+    volumes:
+      - ./data:/app/data
+      - ./credentials:/app/credentials
+    env_file:
+      - .env
+    restart: unless-stopped
+    environment:
+      - TZ=America/Sao_Paulo

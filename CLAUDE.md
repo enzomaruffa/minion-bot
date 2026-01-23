@@ -39,6 +39,7 @@ This file should be kept up-to-date with meaningful project decisions. When we m
 - Use `uv` for all Python operations (never raw `python`)
 - Use `git pr` alias for PRs (never `gh` CLI)
 - Prefer one-liner conventional commits
+- NEVER use `git merge` - always squash & rebase
 
 ## Project Structure
 ```

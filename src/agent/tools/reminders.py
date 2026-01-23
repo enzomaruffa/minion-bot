@@ -5,7 +5,7 @@ from src.db import get_session
 from src.db.queries import (
     create_reminder,
     delete_reminder,
-    list_pending_reminders,
+    list_all_reminders,
 )
 from src.utils import parse_date
 
@@ -39,7 +39,7 @@ def set_reminder(
 
 
 def list_reminders(include_delivered: bool = False) -> str:
-    """List pending reminders.
+    """List reminders.
 
     Args:
         include_delivered: Whether to include already delivered reminders.
@@ -48,17 +48,18 @@ def list_reminders(include_delivered: bool = False) -> str:
         Formatted list of reminders.
     """
     session = get_session()
-    reminders = list_pending_reminders(session)
+    reminders = list_all_reminders(session, include_delivered)
     session.close()
 
     if not reminders:
-        return "No pending reminders."
+        return "No reminders found." if include_delivered else "No pending reminders."
 
     lines = []
     for rem in reminders:
         task_info = f" (task #{rem.task_id})" if rem.task_id else ""
+        status = " ✓" if rem.delivered else ""
         lines.append(
-            f"[{rem.id}] {rem.remind_at.strftime('%Y-%m-%d %H:%M')}: {rem.message}{task_info}"
+            f"#{rem.id}: {rem.remind_at.strftime('%Y-%m-%d %H:%M')}: {rem.message}{task_info}{status}"
         )
 
     return "\n".join(lines)

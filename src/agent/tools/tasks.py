@@ -197,7 +197,7 @@ def search_tasks_tool(query: str) -> str:
         query: Search query to match against task titles and descriptions.
 
     Returns:
-        List of matching tasks with IDs prefixed by # for clarity.
+        List of matching tasks with IDs prefixed by # and project emoji.
     """
     session = get_session()
     tasks = search_tasks(session, query)
@@ -208,8 +208,9 @@ def search_tasks_tool(query: str) -> str:
 
     lines = []
     for task in tasks:
+        project_emoji = task.project.emoji + " " if task.project else ""
         parent_info = f" (subtask of #{task.parent_id})" if task.parent_id else ""
-        lines.append(f"#{task.id}: {task.title} [{task.status.value}]{parent_info}")
+        lines.append(f"#{task.id}: {project_emoji}{task.title} [{task.status.value}]{parent_info}")
 
     return "\n".join(lines)
 
@@ -292,6 +293,7 @@ def add_subtask(
     description: Optional[str] = None,
     priority: Optional[str] = None,
     due_date: Optional[str] = None,
+    project: Optional[str] = None,
 ) -> str:
     """Add a subtask to an existing task.
 
@@ -301,6 +303,7 @@ def add_subtask(
         description: Optional description.
         priority: Priority (low/medium/high/urgent). Defaults to medium.
         due_date: Due date (natural language like "tomorrow" or ISO format).
+        project: Project name. If not provided, inherits from parent task.
 
     Returns:
         Confirmation message with the created subtask ID.
@@ -315,6 +318,13 @@ def add_subtask(
 
     priority_enum = TaskPriority(priority.lower()) if priority else TaskPriority.MEDIUM
     due_dt = parse_date(due_date) if due_date else None
+    
+    # Resolve project - inherit from parent if not specified
+    project_id = parent.project_id  # inherit by default
+    if project:
+        proj = get_project_by_name(session, project)
+        if proj:
+            project_id = proj.id
 
     task = create_task(
         session,
@@ -323,6 +333,7 @@ def add_subtask(
         priority=priority_enum,
         due_date=due_dt,
         parent_id=parent_id,
+        project_id=project_id,
     )
     session.close()
 

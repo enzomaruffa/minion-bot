@@ -9,19 +9,24 @@ from src.db.queries import (
     list_pending_reminders,
     list_tasks_by_status,
 )
+from src.utils import parse_date
 
 
 def get_agenda(date: Optional[str] = None) -> str:
     """Get the agenda for a specific date, including tasks, calendar events, and reminders.
 
     Args:
-        date: The date to get the agenda for in ISO format (YYYY-MM-DD). Defaults to today.
+        date: The date to get the agenda for (natural language like "tomorrow" or YYYY-MM-DD). Defaults to today.
 
     Returns:
         Formatted agenda with tasks due, calendar events, and reminders for the day.
     """
     if date:
-        target_date = datetime.fromisoformat(date).replace(tzinfo=settings.timezone)
+        parsed = parse_date(date)
+        if parsed:
+            target_date = parsed.replace(tzinfo=settings.timezone)
+        else:
+            target_date = datetime.now(settings.timezone)
     else:
         target_date = datetime.now(settings.timezone)
 
@@ -78,8 +83,9 @@ def get_agenda(date: Optional[str] = None) -> str:
     if tasks_due:
         lines.append("\nTasks Due Today:")
         for task in tasks_due:
+            project_emoji = task.project.emoji + " " if task.project else ""
             priority = f"[{task.priority.value}]" if task.priority else ""
-            lines.append(f"  [{task.id}] {task.title} {priority}")
+            lines.append(f"  #{task.id}: {project_emoji}{task.title} {priority}")
     else:
         lines.append("\nNo tasks due today.")
 

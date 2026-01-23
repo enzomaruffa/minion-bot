@@ -237,6 +237,14 @@ def list_pending_reminders(session: Session, before: Optional[datetime] = None) 
     return session.scalars(stmt).all()
 
 
+def list_all_reminders(session: Session, include_delivered: bool = False) -> Sequence[Reminder]:
+    """List reminders, optionally including delivered ones."""
+    stmt = select(Reminder).order_by(Reminder.remind_at.desc())
+    if not include_delivered:
+        stmt = stmt.where(Reminder.delivered == False)
+    return session.scalars(stmt).all()
+
+
 def mark_reminder_delivered(session: Session, reminder_id: int) -> bool:
     reminder = session.get(Reminder, reminder_id)
     if not reminder:

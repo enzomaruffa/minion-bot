@@ -24,7 +24,16 @@ async def tasks_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text("Not authorized.")
         return
 
-    result = list_tasks(status="todo")
+    in_progress = list_tasks(status="in_progress")
+    todo = list_tasks(status="todo")
+
+    parts = []
+    if in_progress and in_progress != "No tasks found.":
+        parts.append(f"IN PROGRESS:\n{in_progress}")
+    if todo and todo != "No tasks found.":
+        parts.append(f"TODO:\n{todo}")
+
+    result = "\n\n".join(parts) if parts else "No tasks found."
     await update.message.reply_text(result)
 
 

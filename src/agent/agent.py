@@ -1,9 +1,33 @@
+import logging
+import time
+from typing import Any, Callable, Dict
+
 from agno.agent import Agent
 from agno.db.sqlite import SqliteDb
 from agno.memory import MemoryManager
 from agno.models.openai import OpenAIChat
 
 from src.config import settings
+
+logger = logging.getLogger(__name__)
+
+
+def tool_logger_hook(
+    function_name: str, function_call: Callable, arguments: Dict[str, Any]
+) -> Any:
+    """Log tool calls with execution time."""
+    logger.info(f"Tool call: {function_name}({arguments})")
+    start_time = time.time()
+    
+    try:
+        result = function_call(**arguments)
+        duration = time.time() - start_time
+        logger.info(f"Tool {function_name} completed in {duration:.2f}s")
+        return result
+    except Exception as e:
+        duration = time.time() - start_time
+        logger.exception(f"Tool {function_name} failed after {duration:.2f}s: {e}")
+        raise
 from src.agent.tools import (
     add_tasks,
     update_task_tool,
@@ -120,6 +144,7 @@ def get_memory_manager() -> MemoryManager:
 
 def create_agent() -> Agent:
     """Create and configure the Minion agent."""
+    logger.info("Creating Minion agent...")
     return Agent(
         model=OpenAIChat(
             id="gpt-5.2",
@@ -147,6 +172,8 @@ def create_agent() -> Agent:
         ],
         instructions=SYSTEM_PROMPT,
         markdown=True,
+        # Tool hooks for logging
+        tool_hooks=[tool_logger_hook],
         # Database for persistence
         db=get_db(),
         # Memory configuration
@@ -182,10 +209,20 @@ SESSION_ID = f"user_{settings.telegram_user_id}"
 
 async def chat(message: str) -> str:
     """Send a message to the agent and get a response."""
-    agent = get_agent()
-    response = agent.run(
-        message,
-        user_id=str(settings.telegram_user_id),
-        session_id=SESSION_ID,
-    )
-    return response.content
+    logger.info(f"Chat input: {message[:100]}{'...' if len(message) > 100 else ''}")
+    
+    try:
+        agent = get_agent()
+        response = agent.run(
+            message,
+            user_id=str(settings.telegram_user_id),
+            session_id=SESSION_ID,
+        )
+        
+        content = response.content or ""
+        logger.info(f"Chat output: {content[:100]}{'...' if len(content) > 100 else ''}")
+        
+        return content
+    except Exception as e:
+        logger.exception(f"Agent error: {e}")
+        raise

@@ -77,6 +77,7 @@ def update_task_tool(
     status: Optional[str] = None,
     priority: Optional[str] = None,
     due_date: Optional[str] = None,
+    project: Optional[str] = None,
 ) -> str:
     """Update an existing task.
 
@@ -87,6 +88,7 @@ def update_task_tool(
         status: New status (todo/in_progress/done/cancelled).
         priority: New priority (low/medium/high/urgent).
         due_date: New due date (natural language like "tomorrow" or ISO format).
+        project: Project name (Work/Personal/Health/Finance/Social/Learning).
 
     Returns:
         Confirmation message or error if task not found.
@@ -96,6 +98,13 @@ def update_task_tool(
     status_enum = TaskStatus(status.lower()) if status else None
     priority_enum = TaskPriority(priority.lower()) if priority else None
     due_dt = parse_date(due_date) if due_date else None
+    
+    # Resolve project by name
+    project_id = None
+    if project:
+        proj = get_project_by_name(session, project)
+        if proj:
+            project_id = proj.id
 
     task = update_task(
         session,
@@ -105,6 +114,7 @@ def update_task_tool(
         status=status_enum,
         priority=priority_enum,
         due_date=due_dt,
+        project_id=project_id,
     )
     session.close()
 

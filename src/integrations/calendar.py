@@ -38,10 +38,13 @@ def get_auth_url() -> Optional[str]:
         _pending_flow = InstalledAppFlow.from_client_secrets_file(
             str(settings.google_credentials_path), 
             SCOPES,
-            redirect_uri="urn:ietf:wg:oauth:2.0:oob"  # Manual copy/paste flow
+            redirect_uri="http://localhost"  # Localhost redirect - user copies code from URL
         )
         
-        auth_url, _ = _pending_flow.authorization_url(prompt="consent")
+        auth_url, _ = _pending_flow.authorization_url(
+            prompt="consent",
+            access_type="offline",  # Get refresh token
+        )
         logger.info("Generated OAuth URL successfully")
         return auth_url
     except Exception as e:

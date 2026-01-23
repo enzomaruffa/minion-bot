@@ -144,8 +144,11 @@ async def auth_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "🔗 *Google Calendar Authorization*\n\n"
         f"1. [Click here to authorize]({auth_url})\n"
         "2. Sign in with your Google account\n"
-        "3. Copy the authorization code\n"
-        "4. Send it back to me here\n\n"
+        "3. After authorizing, you'll be redirected to a page that won't load\n"
+        "4. Look at the URL bar - copy the `code=` parameter\n"
+        "   Example: `http://localhost/?code=4/0ABC...&scope=...`\n"
+        "   Copy just the code part: `4/0ABC...`\n"
+        "5. Send that code back to me here\n\n"
         "_Waiting for your code..._",
         parse_mode="Markdown",
         disable_web_page_preview=True,

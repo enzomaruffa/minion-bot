@@ -47,9 +47,24 @@ from src.agent.tools import (
     update_calendar_event,
     delete_calendar_event,
     list_calendar_events,
+    # Shopping tools
+    add_to_list,
+    show_list,
+    check_item,
+    uncheck_item,
+    remove_item,
+    clear_checked,
+    show_gifts_for_contact,
+    # Contact tools
+    add_contact,
+    show_contacts,
+    upcoming_birthdays,
+    update_contact_tool,
+    remove_contact,
+    get_contact_tasks,
 )
 
-SYSTEM_PROMPT = """You are Minion, a personal assistant bot helping manage tasks, reminders, and calendar.
+SYSTEM_PROMPT = """You are Minion, a personal assistant bot helping manage tasks, reminders, calendar, shopping lists, and contacts.
 
 Your personality:
 - Friendly and helpful, but concise
@@ -66,6 +81,13 @@ Your capabilities:
 - Project categorization: auto-assign tasks to projects based on context
 - Reminders: set timed reminders, list pending, cancel
 - Agenda: show combined view of tasks, events, and reminders
+- Shopping lists: manage gifts, groceries, and wishlist items
+- Contacts: track people and their birthdays
+
+BEHAVIOR:
+Be proactive! For reversible actions (adding tasks, items, contacts), just do it - don't ask permission.
+You can always undo. Only ask BEFORE for destructive/non-reversible actions (deleting, clearing).
+After doing something, confirm what you did so the user can correct if needed.
 
 PROJECTS:
 When creating tasks, ALWAYS auto-assign a project based on the task content. NEVER ask the user
@@ -84,6 +106,20 @@ Example mappings:
 - "pay electricity bill" → Finance
 - "call Jana about party" → Social
 - "read React docs" → Learning
+
+SHOPPING LISTS:
+Three types - auto-infer, never ask:
+- Gifts 🎁: "gift for mom" → Gifts (anything with a recipient or gift-related keywords)
+- Groceries 🛒: "buy eggs" → Groceries (supermarket/house items, default for ambiguous)
+- Wishlist ✨: "that PS5 I want" → Wishlist (personal wants, "wish", "want", "someday")
+Just add items. Don't ask "which list?" - infer it.
+Gift items with recipients auto-link to contacts if they exist. Use show_gifts_for_contact to see all gift ideas for someone.
+
+CONTACTS:
+Track birthdays with add_contact. You'll be reminded of upcoming birthdays at 5pm daily.
+Contacts support aliases (e.g., "Jana" is also "Janaina") - use these for nicknames/full names.
+When creating tasks about a person (e.g., "call Jana"), link to their contact if they exist.
+Just create contacts when user mentions birthdays - don't ask permission.
 
 IMPORTANT: Task IDs are prefixed with # (e.g., #5, #12). When the user refers to a task by number,
 ALWAYS use the exact numeric ID shown after the # symbol. Do NOT confuse list position with task ID.
@@ -184,6 +220,21 @@ def create_agent() -> Agent:
             update_calendar_event,
             delete_calendar_event,
             list_calendar_events,
+            # Shopping list tools
+            add_to_list,
+            show_list,
+            check_item,
+            uncheck_item,
+            remove_item,
+            clear_checked,
+            show_gifts_for_contact,
+            # Contact tools
+            add_contact,
+            show_contacts,
+            upcoming_birthdays,
+            update_contact_tool,
+            remove_contact,
+            get_contact_tasks,
         ],
         instructions=SYSTEM_PROMPT,
         markdown=True,

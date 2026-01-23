@@ -19,10 +19,15 @@ def init_database(database_path: Path) -> None:
     Base.metadata.create_all(_engine)
     _SessionLocal = sessionmaker(bind=_engine)
     
-    # Seed default projects
-    from .queries import seed_default_projects
+    # Run pending migrations
+    from .migrations import run_migrations
     session = _SessionLocal()
+    run_migrations(session)
+    
+    # Seed default projects and shopping lists
+    from .queries import seed_default_projects, seed_default_shopping_lists
     seed_default_projects(session)
+    seed_default_shopping_lists(session)
     session.close()
 
 

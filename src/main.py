@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 def register_jobs() -> None:
     """Register scheduled jobs (must be called before start)."""
-    # Morning summary at 11 AM
-    add_cron_job(morning_summary, hour=11, minute=0, job_id="morning_summary")
+    # Morning summary at 10:30 AM
+    add_cron_job(morning_summary, hour=10, minute=30, job_id="morning_summary")
 
     # EOD review at 9 PM
     add_cron_job(eod_review, hour=21, minute=0, job_id="eod_review")
@@ -24,8 +24,8 @@ def register_jobs() -> None:
     # Reminder delivery every minute
     add_interval_job(deliver_reminders, minutes=1, job_id="reminder_delivery")
     
-    # Proactive intelligence every 4 hours
-    add_interval_job(proactive_intelligence, minutes=240, job_id="proactive_intelligence")
+    # Proactive intelligence at 5 PM daily
+    add_cron_job(proactive_intelligence, hour=17, minute=0, job_id="proactive_intelligence")
 
 
 async def post_init(application) -> None:

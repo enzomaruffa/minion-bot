@@ -7,6 +7,8 @@ from src.db.models import Task, TaskPriority, TaskStatus
 from src.db.queries import (
     create_task,
     delete_task,
+    get_contact,
+    get_contact_by_name,
     get_project_by_name,
     get_task,
     get_subtasks,
@@ -26,7 +28,8 @@ def add_tasks(tasks: list[dict]) -> str:
                priority (optional: low/medium/high/urgent), due_date (optional: natural language
                like "tomorrow", "next Monday", "in 2 hours" or ISO format),
                parent_id (optional: ID of parent task for creating subtasks),
-               project (optional: project name like "Work", "Personal", "Health", etc.)
+               project (optional: project name like "Work", "Personal", "Health", etc.),
+               contact (optional: contact name to link the task to)
 
     Returns:
         Confirmation message with created task IDs.
@@ -55,6 +58,13 @@ def add_tasks(tasks: list[dict]) -> str:
             if project:
                 project_id = project.id
 
+        # Resolve contact by name
+        contact_id = None
+        if contact_name := task_data.get("contact"):
+            contact = get_contact_by_name(session, contact_name)
+            if contact:
+                contact_id = contact.id
+
         task = create_task(
             session,
             title=title,
@@ -63,6 +73,7 @@ def add_tasks(tasks: list[dict]) -> str:
             due_date=due_date,
             parent_id=parent_id,
             project_id=project_id,
+            contact_id=contact_id,
         )
         created_ids.append(task.id)
 
@@ -222,7 +233,7 @@ def get_task_details(task_id: int) -> str:
         task_id: The ID of the task.
 
     Returns:
-        Detailed task information including parent, subtasks, and attachments.
+        Detailed task information including parent, subtasks, contact, and attachments.
     """
     session = get_session()
     task = get_task(session, task_id)
@@ -242,6 +253,12 @@ def get_task_details(task_id: int) -> str:
 
     if task.project:
         lines.append(f"Project: {task.project.emoji} {task.project.name}")
+
+    if task.contact:
+        contact_info = f"Contact: {task.contact.name}"
+        if task.contact.birthday:
+            contact_info += f" (🎂 {task.contact.birthday.strftime('%B %d')})"
+        lines.append(contact_info)
 
     if task.parent_id:
         parent = get_task(session, task.parent_id)

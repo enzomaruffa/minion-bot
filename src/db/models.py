@@ -24,6 +24,31 @@ class TaskPriority(str, Enum):
     URGENT = "urgent"
 
 
+class ShoppingListType(str, Enum):
+    GIFTS = "gifts"
+    GROCERIES = "groceries"
+    WISHLIST = "wishlist"
+
+
+class ItemPriority(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class Contact(Base):
+    __tablename__ = "contacts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    aliases: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)  # Comma-separated
+    birthday: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+    tasks: Mapped[list["Task"]] = relationship(back_populates="contact")
+
+
 class Project(Base):
     __tablename__ = "projects"
 
@@ -46,6 +71,7 @@ class Task(Base):
     due_date: Mapped[Optional[datetime]] = mapped_column(nullable=True)
     parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tasks.id"), nullable=True)
     project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id"), nullable=True)
+    contact_id: Mapped[Optional[int]] = mapped_column(ForeignKey("contacts.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         default=datetime.utcnow, onupdate=datetime.utcnow
@@ -58,6 +84,7 @@ class Task(Base):
     attachments: Mapped[list["Attachment"]] = relationship(back_populates="task")
     reminders: Mapped[list["Reminder"]] = relationship(back_populates="task")
     project: Mapped[Optional["Project"]] = relationship(back_populates="tasks")
+    contact: Mapped[Optional["Contact"]] = relationship(back_populates="tasks")
 
 
 class Attachment(Base):
@@ -104,6 +131,33 @@ class Topic(Base):
     name: Mapped[str] = mapped_column(String(100), unique=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+
+class ShoppingList(Base):
+    __tablename__ = "shopping_lists"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    list_type: Mapped[ShoppingListType] = mapped_column(unique=True)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+    items: Mapped[list["ShoppingItem"]] = relationship(back_populates="shopping_list")
+
+
+class ShoppingItem(Base):
+    __tablename__ = "shopping_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    list_id: Mapped[int] = mapped_column(ForeignKey("shopping_lists.id"))
+    name: Mapped[str] = mapped_column(String(255))
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    recipient: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # Fallback if no contact
+    contact_id: Mapped[Optional[int]] = mapped_column(ForeignKey("contacts.id"), nullable=True)
+    priority: Mapped[ItemPriority] = mapped_column(default=ItemPriority.MEDIUM)
+    checked: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+    shopping_list: Mapped["ShoppingList"] = relationship(back_populates="items")
+    contact: Mapped[Optional["Contact"]] = relationship()
 
 
 def init_db(database_url: str) -> None:

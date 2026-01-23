@@ -7,8 +7,13 @@ from sqlalchemy.orm import Session
 from .models import (
     Attachment,
     CalendarEvent,
+    Contact,
+    ItemPriority,
     Project,
     Reminder,
+    ShoppingItem,
+    ShoppingList,
+    ShoppingListType,
     Task,
     TaskPriority,
     TaskStatus,
@@ -67,6 +72,7 @@ def create_task(
     due_date: Optional[datetime] = None,
     parent_id: Optional[int] = None,
     project_id: Optional[int] = None,
+    contact_id: Optional[int] = None,
 ) -> Task:
     task = Task(
         title=title,
@@ -75,6 +81,7 @@ def create_task(
         due_date=due_date,
         parent_id=parent_id,
         project_id=project_id,
+        contact_id=contact_id,
     )
     session.add(task)
     session.commit()
@@ -96,8 +103,10 @@ def update_task(
     due_date: Optional[datetime] = None,
     parent_id: Optional[int] = None,
     project_id: Optional[int] = None,
+    contact_id: Optional[int] = None,
     clear_parent: bool = False,
     clear_project: bool = False,
+    clear_contact: bool = False,
 ) -> Optional[Task]:
     task = session.get(Task, task_id)
     if not task:
@@ -117,10 +126,14 @@ def update_task(
         task.parent_id = parent_id
     if project_id is not None:
         task.project_id = project_id
+    if contact_id is not None:
+        task.contact_id = contact_id
     if clear_parent:
         task.parent_id = None
     if clear_project:
         task.project_id = None
+    if clear_contact:
+        task.contact_id = None
 
     session.commit()
     session.refresh(task)
@@ -360,4 +373,248 @@ def get_or_create_topic(
 
 def list_topics(session: Session) -> Sequence[Topic]:
     stmt = select(Topic).order_by(Topic.name)
+    return session.scalars(stmt).all()
+
+
+# Shopping List CRUD
+def seed_default_shopping_lists(session: Session) -> None:
+    """Seed default shopping lists if they don't exist."""
+    for list_type in ShoppingListType:
+        existing = session.scalars(
+            select(ShoppingList).where(ShoppingList.list_type == list_type)
+        ).first()
+        if not existing:
+            session.add(ShoppingList(list_type=list_type))
+    session.commit()
+
+
+def get_shopping_list_by_type(
+    session: Session, list_type: ShoppingListType
+) -> Optional[ShoppingList]:
+    """Get a shopping list by type."""
+    stmt = select(ShoppingList).where(ShoppingList.list_type == list_type)
+    return session.scalars(stmt).first()
+
+
+def create_shopping_item(
+    session: Session,
+    list_type: ShoppingListType,
+    name: str,
+    notes: Optional[str] = None,
+    recipient: Optional[str] = None,
+    contact_id: Optional[int] = None,
+    priority: ItemPriority = ItemPriority.MEDIUM,
+) -> ShoppingItem:
+    """Create a new shopping item."""
+    shopping_list = get_shopping_list_by_type(session, list_type)
+    if not shopping_list:
+        # Create the list if it doesn't exist
+        shopping_list = ShoppingList(list_type=list_type)
+        session.add(shopping_list)
+        session.flush()
+
+    item = ShoppingItem(
+        list_id=shopping_list.id,
+        name=name,
+        notes=notes,
+        recipient=recipient,
+        contact_id=contact_id,
+        priority=priority,
+    )
+    session.add(item)
+    session.commit()
+    session.refresh(item)
+    return item
+
+
+def get_shopping_item(session: Session, item_id: int) -> Optional[ShoppingItem]:
+    """Get a shopping item by ID."""
+    return session.get(ShoppingItem, item_id)
+
+
+def list_shopping_items(
+    session: Session,
+    list_type: Optional[ShoppingListType] = None,
+    include_checked: bool = True,
+) -> Sequence[ShoppingItem]:
+    """List shopping items, optionally filtered by list type."""
+    stmt = select(ShoppingItem).order_by(ShoppingItem.created_at.desc())
+    if list_type:
+        shopping_list = get_shopping_list_by_type(session, list_type)
+        if shopping_list:
+            stmt = stmt.where(ShoppingItem.list_id == shopping_list.id)
+        else:
+            return []
+    if not include_checked:
+        stmt = stmt.where(ShoppingItem.checked == False)
+    return session.scalars(stmt).all()
+
+
+def check_shopping_item(session: Session, item_id: int, checked: bool = True) -> bool:
+    """Mark a shopping item as checked/unchecked."""
+    item = session.get(ShoppingItem, item_id)
+    if not item:
+        return False
+    item.checked = checked
+    session.commit()
+    return True
+
+
+def delete_shopping_item(session: Session, item_id: int) -> bool:
+    """Delete a shopping item."""
+    item = session.get(ShoppingItem, item_id)
+    if not item:
+        return False
+    session.delete(item)
+    session.commit()
+    return True
+
+
+def clear_checked_items(
+    session: Session, list_type: Optional[ShoppingListType] = None
+) -> int:
+    """Clear all checked items, optionally from a specific list. Returns count."""
+    items = list_shopping_items(session, list_type, include_checked=True)
+    count = 0
+    for item in items:
+        if item.checked:
+            session.delete(item)
+            count += 1
+    session.commit()
+    return count
+
+
+# Contact CRUD
+def create_contact(
+    session: Session,
+    name: str,
+    aliases: Optional[str] = None,
+    birthday: Optional[datetime] = None,
+    notes: Optional[str] = None,
+) -> Contact:
+    """Create a new contact."""
+    contact = Contact(name=name, aliases=aliases, birthday=birthday, notes=notes)
+    session.add(contact)
+    session.commit()
+    session.refresh(contact)
+    return contact
+
+
+def get_contact(session: Session, contact_id: int) -> Optional[Contact]:
+    """Get a contact by ID."""
+    return session.get(Contact, contact_id)
+
+
+def get_contact_by_name(session: Session, name: str) -> Optional[Contact]:
+    """Get a contact by name or alias (case-insensitive)."""
+    # First try exact name match
+    stmt = select(Contact).where(Contact.name.ilike(name))
+    contact = session.scalars(stmt).first()
+    if contact:
+        return contact
+
+    # Search in aliases (comma-separated)
+    contacts = list_contacts(session)
+    name_lower = name.lower()
+    for contact in contacts:
+        if contact.aliases:
+            aliases = [a.strip().lower() for a in contact.aliases.split(",")]
+            if name_lower in aliases:
+                return contact
+    return None
+
+
+def list_contacts(session: Session) -> Sequence[Contact]:
+    """List all contacts ordered by name."""
+    stmt = select(Contact).order_by(Contact.name)
+    return session.scalars(stmt).all()
+
+
+def update_contact(
+    session: Session,
+    contact_id: int,
+    name: Optional[str] = None,
+    aliases: Optional[str] = None,
+    birthday: Optional[datetime] = None,
+    notes: Optional[str] = None,
+    clear_birthday: bool = False,
+    clear_aliases: bool = False,
+) -> Optional[Contact]:
+    """Update a contact."""
+    contact = session.get(Contact, contact_id)
+    if not contact:
+        return None
+
+    if name is not None:
+        contact.name = name
+    if aliases is not None:
+        contact.aliases = aliases
+    if birthday is not None:
+        contact.birthday = birthday
+    if notes is not None:
+        contact.notes = notes
+    if clear_birthday:
+        contact.birthday = None
+    if clear_aliases:
+        contact.aliases = None
+
+    session.commit()
+    session.refresh(contact)
+    return contact
+
+
+def delete_contact(session: Session, contact_id: int) -> bool:
+    """Delete a contact."""
+    contact = session.get(Contact, contact_id)
+    if not contact:
+        return False
+    session.delete(contact)
+    session.commit()
+    return True
+
+
+def list_upcoming_birthdays(session: Session, within_days: int = 14) -> Sequence[Contact]:
+    """List contacts with birthdays within the next N days."""
+    from datetime import timedelta
+
+    contacts = list_contacts(session)
+    today = datetime.now().date()
+    upcoming = []
+
+    for contact in contacts:
+        if contact.birthday:
+            # Get this year's birthday
+            bday = contact.birthday.date() if isinstance(contact.birthday, datetime) else contact.birthday
+            this_year_bday = bday.replace(year=today.year)
+
+            # If birthday already passed this year, check next year
+            if this_year_bday < today:
+                this_year_bday = bday.replace(year=today.year + 1)
+
+            days_until = (this_year_bday - today).days
+            if 0 <= days_until <= within_days:
+                upcoming.append((contact, days_until))
+
+    # Sort by days until birthday
+    upcoming.sort(key=lambda x: x[1])
+    return [c for c, _ in upcoming]
+
+
+def get_tasks_by_contact(session: Session, contact_id: int) -> Sequence[Task]:
+    """Get all tasks linked to a contact."""
+    stmt = (
+        select(Task)
+        .where(Task.contact_id == contact_id)
+        .order_by(Task.created_at.desc())
+    )
+    return session.scalars(stmt).all()
+
+
+def get_gifts_by_contact(session: Session, contact_id: int) -> Sequence[ShoppingItem]:
+    """Get all gift items linked to a contact."""
+    stmt = (
+        select(ShoppingItem)
+        .where(ShoppingItem.contact_id == contact_id)
+        .order_by(ShoppingItem.created_at.desc())
+    )
     return session.scalars(stmt).all()

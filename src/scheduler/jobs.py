@@ -11,6 +11,7 @@ from src.db.queries import (
     list_pending_reminders,
     list_tasks_by_status,
     list_tasks_due_soon,
+    list_upcoming_birthdays,
     mark_reminder_delivered,
     update_task,
 )
@@ -172,6 +173,29 @@ async def proactive_intelligence() -> None:
                 f"💡 Task #{task.id} seems complex. Consider breaking it into subtasks:\n"
                 f"  \"{task.title[:60]}{'...' if len(task.title) > 60 else ''}\""
             )
+        
+        # 5. Upcoming birthdays (within 7 days)
+        upcoming_contacts = list_upcoming_birthdays(session, within_days=7)
+        if upcoming_contacts:
+            today = now.date()
+            lines = ["🎂 **Upcoming Birthdays:**"]
+            for contact in upcoming_contacts:
+                if contact.birthday:
+                    bday = contact.birthday.date() if hasattr(contact.birthday, 'date') else contact.birthday
+                    this_year_bday = bday.replace(year=today.year)
+                    if this_year_bday < today:
+                        this_year_bday = bday.replace(year=today.year + 1)
+                    days_until = (this_year_bday - today).days
+                    
+                    if days_until == 0:
+                        when = "TODAY!"
+                    elif days_until == 1:
+                        when = "tomorrow"
+                    else:
+                        when = f"in {days_until} days"
+                    
+                    lines.append(f"  • {contact.name} - {when}")
+            messages.append("\n".join(lines))
         
         session.close()
         

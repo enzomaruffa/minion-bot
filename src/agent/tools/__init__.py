@@ -22,6 +22,23 @@ from .calendar import (
     delete_calendar_event,
     list_calendar_events,
 )
+from .shopping import (
+    add_to_list,
+    show_list,
+    check_item,
+    uncheck_item,
+    remove_item,
+    clear_checked,
+    show_gifts_for_contact,
+)
+from .contacts import (
+    add_contact,
+    show_contacts,
+    upcoming_birthdays,
+    update_contact_tool,
+    remove_contact,
+    get_contact_tasks,
+)
 
 __all__ = [
     "add_tasks",
@@ -42,4 +59,19 @@ __all__ = [
     "update_calendar_event",
     "delete_calendar_event",
     "list_calendar_events",
+    # Shopping tools
+    "add_to_list",
+    "show_list",
+    "check_item",
+    "uncheck_item",
+    "remove_item",
+    "clear_checked",
+    "show_gifts_for_contact",
+    # Contact tools
+    "add_contact",
+    "show_contacts",
+    "upcoming_birthdays",
+    "update_contact_tool",
+    "remove_contact",
+    "get_contact_tasks",
 ]

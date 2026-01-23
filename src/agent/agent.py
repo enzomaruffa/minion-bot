@@ -2,7 +2,6 @@ from agno.agent import Agent
 from agno.db.sqlite import SqliteDb
 from agno.memory import MemoryManager
 from agno.models.openai import OpenAIChat
-from agno.tools.reasoning import ReasoningTools
 
 from src.config import settings
 from src.agent.tools import (
@@ -75,8 +74,6 @@ def create_agent() -> Agent:
             api_key=settings.openai_api_key,
         ),
         tools=[
-            # Reasoning tools for better problem solving
-            ReasoningTools(add_instructions=True),
             # Task management tools
             add_tasks,
             update_task_tool,

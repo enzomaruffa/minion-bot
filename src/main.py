@@ -4,7 +4,7 @@ from src.config import settings
 from src.db import init_database
 from src.scheduler import add_cron_job, add_interval_job, start_scheduler, shutdown_scheduler
 from src.scheduler.jobs import morning_summary, eod_review, deliver_reminders, proactive_intelligence
-from src.telegram.bot import create_application
+from src.telegram.bot import create_application, register_commands
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -30,6 +30,9 @@ def register_jobs() -> None:
 
 async def post_init(application) -> None:
     """Called after the application is initialized with event loop running."""
+    logger.info("Registering bot commands...")
+    await register_commands(application)
+    
     logger.info("Starting scheduler...")
     start_scheduler()
 

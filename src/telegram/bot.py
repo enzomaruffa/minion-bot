@@ -128,6 +128,21 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
 
 
+async def register_commands(application: Application) -> None:
+    """Register bot commands with Telegram for the menu."""
+    from telegram import BotCommand
+    
+    commands = [
+        BotCommand("tasks", "List pending tasks"),
+        BotCommand("today", "Show today's agenda"),
+        BotCommand("done", "Mark recent task as complete"),
+        BotCommand("calendar", "Show upcoming events"),
+        BotCommand("help", "Show help"),
+    ]
+    await application.bot.set_my_commands(commands)
+    logger.info("Bot commands registered with Telegram")
+
+
 def create_application() -> Application:
     """Create and configure the Telegram application."""
     application = Application.builder().token(settings.telegram_bot_token).build()

@@ -63,9 +63,7 @@ def get_agenda(date: Optional[str] = None) -> str:
         if r.remind_at >= day_start.replace(tzinfo=None)
     ]
 
-    session.close()
-
-    # Format output
+    # Format output while session is still open (to access relationships)
     lines = [f"Agenda for {target_date.strftime('%A, %B %d, %Y')}"]
     lines.append("=" * 40)
 
@@ -99,5 +97,7 @@ def get_agenda(date: Optional[str] = None) -> str:
     # Pending tasks (backlog)
     if pending_tasks:
         lines.append(f"\nBacklog ({len(pending_tasks)} pending tasks)")
+
+    session.close()
 
     return "\n".join(lines)

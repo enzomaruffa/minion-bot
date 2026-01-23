@@ -142,13 +142,15 @@ async def auth_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     _awaiting_auth_code = True
     await update.message.reply_text(
         "🔗 *Google Calendar Authorization*\n\n"
-        f"1. [Click here to authorize]({auth_url})\n"
-        "2. Sign in with your Google account\n"
-        "3. After authorizing, you'll be redirected to a page that won't load\n"
-        "4. Look at the URL bar - copy the `code=` parameter\n"
-        "   Example: `http://localhost/?code=4/0ABC...&scope=...`\n"
-        "   Copy just the code part: `4/0ABC...`\n"
-        "5. Send that code back to me here\n\n"
+        f"1. [Tap here to authorize]({auth_url})\n\n"
+        "2. Sign in with your Google account and allow access\n\n"
+        "3. You'll see a page that *won't load* - this is expected!\n\n"
+        "4. *On iPhone:* Tap the URL bar at the top to see the full URL\n"
+        "   *On desktop:* Look at the address bar\n\n"
+        "5. Find `code=` in the URL and copy everything after it until the `&`\n"
+        "   Example URL: `localhost/?code=4/0AeanS0r...&scope=...`\n"
+        "   Copy: `4/0AeanS0r...` (the part between `code=` and `&`)\n\n"
+        "6. Send that code back to me here\n\n"
         "_Waiting for your code..._",
         parse_mode="Markdown",
         disable_web_page_preview=True,

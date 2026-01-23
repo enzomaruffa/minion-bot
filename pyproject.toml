@@ -13,6 +13,7 @@ dependencies = [
     "python-dotenv>=1.2.1",
     "python-telegram-bot>=22.5",
     "sqlalchemy>=2.0.46",
+    "dateparser>=1.2.0",
 ]
 
 [build-system]

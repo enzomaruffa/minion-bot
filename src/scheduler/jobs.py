@@ -4,8 +4,16 @@ from datetime import datetime, timedelta
 from src.agent.tools.agenda import get_agenda
 from src.config import settings
 from src.db import get_session
-from src.db.models import TaskStatus
-from src.db.queries import list_tasks_by_status, list_pending_reminders, mark_reminder_delivered
+from src.db.models import TaskPriority, TaskStatus
+from src.db.queries import (
+    count_tasks_by_due_date,
+    list_overdue_tasks,
+    list_pending_reminders,
+    list_tasks_by_status,
+    list_tasks_due_soon,
+    mark_reminder_delivered,
+    update_task,
+)
 from src.telegram.bot import send_message
 
 logger = logging.getLogger(__name__)
@@ -106,3 +114,74 @@ async def deliver_reminders() -> None:
         session.close()
     except Exception as e:
         logger.exception(f"Error in reminder delivery job: {e}")
+
+
+async def proactive_intelligence() -> None:
+    """Smart nudges and suggestions sent proactively."""
+    logger.info("Running proactive intelligence job")
+    
+    try:
+        session = get_session()
+        now = datetime.now(settings.timezone).replace(tzinfo=None)
+        messages = []
+        
+        # 1. Priority escalation: bump priority for tasks due within 24h
+        due_soon = list_tasks_due_soon(session, now, within_hours=24)
+        escalated = []
+        for task in due_soon:
+            if task.priority in [TaskPriority.LOW, TaskPriority.MEDIUM]:
+                update_task(session, task.id, priority=TaskPriority.HIGH)
+                escalated.append(task)
+        
+        if escalated:
+            task_list = ", ".join([f"#{t.id}" for t in escalated[:5]])
+            if len(escalated) > 5:
+                task_list += f" and {len(escalated) - 5} more"
+            messages.append(f"⚡ Priority escalated for tasks due within 24h: {task_list}")
+        
+        # 2. Overdue nudges
+        overdue = list_overdue_tasks(session, now)
+        if overdue:
+            lines = ["📅 You have overdue tasks:"]
+            for task in overdue[:5]:
+                days_overdue = (now - task.due_date).days
+                emoji = task.project.emoji if task.project else ""
+                lines.append(f"  • #{task.id}: {emoji} {task.title} ({days_overdue}d overdue)")
+            if len(overdue) > 5:
+                lines.append(f"  ... and {len(overdue) - 5} more")
+            messages.append("\n".join(lines))
+        
+        # 3. Smart scheduling: warn about overloaded days
+        tomorrow = now + timedelta(days=1)
+        tomorrow_count = count_tasks_by_due_date(session, tomorrow)
+        if tomorrow_count >= 5:
+            messages.append(
+                f"⚠️ You have {tomorrow_count} tasks due tomorrow. "
+                "Consider rescheduling some if needed."
+            )
+        
+        # 4. Breakdown suggestions for complex tasks
+        todo_tasks = list_tasks_by_status(session, TaskStatus.TODO, root_only=True)
+        complex_tasks = [
+            t for t in todo_tasks
+            if len(t.title) > 50 or (t.description and len(t.description) > 200)
+        ]
+        if complex_tasks:
+            task = complex_tasks[0]  # Just suggest for one at a time
+            messages.append(
+                f"💡 Task #{task.id} seems complex. Consider breaking it into subtasks:\n"
+                f"  \"{task.title[:60]}{'...' if len(task.title) > 60 else ''}\""
+            )
+        
+        session.close()
+        
+        # Send combined message if there are any nudges
+        if messages:
+            combined = "🤖 **Proactive Check-in**\n\n" + "\n\n".join(messages)
+            await send_message(combined)
+            logger.info(f"Sent proactive intelligence message with {len(messages)} nudges")
+        else:
+            logger.info("No proactive nudges needed")
+            
+    except Exception as e:
+        logger.exception(f"Error in proactive intelligence job: {e}")

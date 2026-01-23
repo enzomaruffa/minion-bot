@@ -13,6 +13,7 @@ from src.agent.tools import (
     delete_task_tool,
     add_subtask,
     move_task,
+    list_projects,
     set_reminder,
     list_reminders,
     cancel_reminder,
@@ -29,8 +30,27 @@ Your personality:
 Your capabilities:
 - Task management: create, update, list, search, and delete tasks
 - Task hierarchy: create subtasks under parent tasks, move tasks between parents
+- Project categorization: auto-assign tasks to projects based on context
 - Reminders: set timed reminders, list pending, cancel
 - Agenda: show combined view of tasks, events, and reminders
+
+PROJECTS:
+When creating tasks, ALWAYS auto-assign a project based on the task content. NEVER ask the user
+which project to use - infer it from context. Available projects:
+- Work 💼: job tasks, meetings, PRs, code reviews, office work
+- Personal 🏠: home tasks, errands, personal projects
+- Health 🏃: exercise, medical appointments, wellness
+- Finance 💰: bills, budget, investments, taxes
+- Social 👥: friends, family, events, gatherings
+- Learning 📚: courses, books, skills, tutorials
+
+Example mappings:
+- "finish FBI PR" → Work
+- "buy groceries" → Personal
+- "schedule dentist" → Health
+- "pay electricity bill" → Finance
+- "call Jana about party" → Social
+- "read React docs" → Learning
 
 IMPORTANT: Task IDs are prefixed with # (e.g., #5, #12). When the user refers to a task by number,
 ALWAYS use the exact numeric ID shown after the # symbol. Do NOT confuse list position with task ID.
@@ -64,11 +84,36 @@ def get_memory_manager() -> MemoryManager:
         db=get_db(),
         additional_instructions="""
         Focus on remembering:
-        - User preferences and habits
-        - Recurring tasks and schedules
-        - Important dates and deadlines
-        - Project context and goals
-        Do NOT store sensitive information like passwords or API keys.
+        
+        PEOPLE:
+        - Names and relationships (e.g., "Jana is friend", "Carlos is accountant")
+        - Context about people mentioned (work colleague, family, service provider)
+        - How the user prefers to interact with them
+        
+        PROJECTS & GOALS:
+        - Active projects the user is working on
+        - Project goals and desired outcomes
+        - Project deadlines and milestones
+        
+        PREFERENCES & HABITS:
+        - Work hours and productivity patterns
+        - Preferred task organization style
+        - Communication preferences
+        - Recurring schedules (gym days, meeting patterns)
+        
+        CONTEXT FROM CONVERSATIONS:
+        - Ongoing situations (job search, health goals, events planning)
+        - Decisions made and their reasoning
+        - Things the user said they would do later
+        
+        IMPORTANT DATES:
+        - Birthdays, anniversaries, deadlines
+        - Recurring appointments
+        
+        Do NOT store:
+        - Passwords, API keys, or sensitive credentials
+        - Financial account details
+        - Temporary information with no lasting value
         """,
     )
 
@@ -91,6 +136,8 @@ def create_agent() -> Agent:
             # Task hierarchy tools
             add_subtask,
             move_task,
+            # Project tools
+            list_projects,
             # Reminder tools
             set_reminder,
             list_reminders,

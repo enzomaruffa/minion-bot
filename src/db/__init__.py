@@ -18,6 +18,12 @@ def init_database(database_path: Path) -> None:
     _engine = create_engine(database_url)
     Base.metadata.create_all(_engine)
     _SessionLocal = sessionmaker(bind=_engine)
+    
+    # Seed default projects
+    from .queries import seed_default_projects
+    session = _SessionLocal()
+    seed_default_projects(session)
+    session.close()
 
 
 def get_session() -> Session:

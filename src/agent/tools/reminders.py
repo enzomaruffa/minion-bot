@@ -7,6 +7,7 @@ from src.db.queries import (
     delete_reminder,
     list_pending_reminders,
 )
+from src.utils import parse_date
 
 
 def set_reminder(
@@ -18,7 +19,8 @@ def set_reminder(
 
     Args:
         message: The reminder message to be sent.
-        remind_at: When to send the reminder in ISO format (e.g., 2024-01-15T14:30:00).
+        remind_at: When to send the reminder (natural language like "tomorrow at 3pm",
+                   "in 2 hours", "next Monday" or ISO format).
         task_id: Optional task ID to link this reminder to.
 
     Returns:
@@ -26,7 +28,10 @@ def set_reminder(
     """
     session = get_session()
 
-    remind_dt = datetime.fromisoformat(remind_at)
+    remind_dt = parse_date(remind_at)
+    if not remind_dt:
+        session.close()
+        return f"Could not parse date: {remind_at}"
     reminder = create_reminder(session, message, remind_dt, task_id)
     session.close()
 

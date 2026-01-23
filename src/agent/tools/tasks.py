@@ -2,12 +2,15 @@ from datetime import datetime
 from typing import Optional
 
 from src.db import get_session
+from src.utils import parse_date
 from src.db.models import Task, TaskPriority, TaskStatus
 from src.db.queries import (
     create_task,
     delete_task,
+    get_project_by_name,
     get_task,
     get_subtasks,
+    list_projects as db_list_projects,
     list_tasks_by_status,
     search_tasks,
     update_task,
@@ -20,8 +23,10 @@ def add_tasks(tasks: list[dict]) -> str:
 
     Args:
         tasks: List of task dictionaries with keys: title (required), description (optional),
-               priority (optional: low/medium/high/urgent), due_date (optional: ISO format),
-               parent_id (optional: ID of parent task for creating subtasks)
+               priority (optional: low/medium/high/urgent), due_date (optional: natural language
+               like "tomorrow", "next Monday", "in 2 hours" or ISO format),
+               parent_id (optional: ID of parent task for creating subtasks),
+               project (optional: project name like "Work", "Personal", "Health", etc.)
 
     Returns:
         Confirmation message with created task IDs.
@@ -39,9 +44,16 @@ def add_tasks(tasks: list[dict]) -> str:
 
         due_date = None
         if due_str := task_data.get("due_date"):
-            due_date = datetime.fromisoformat(due_str)
+            due_date = parse_date(due_str)
 
         parent_id = task_data.get("parent_id")
+        
+        # Resolve project by name
+        project_id = None
+        if project_name := task_data.get("project"):
+            project = get_project_by_name(session, project_name)
+            if project:
+                project_id = project.id
 
         task = create_task(
             session,
@@ -50,6 +62,7 @@ def add_tasks(tasks: list[dict]) -> str:
             priority=priority,
             due_date=due_date,
             parent_id=parent_id,
+            project_id=project_id,
         )
         created_ids.append(task.id)
 
@@ -73,7 +86,7 @@ def update_task_tool(
         description: New description for the task.
         status: New status (todo/in_progress/done/cancelled).
         priority: New priority (low/medium/high/urgent).
-        due_date: New due date in ISO format.
+        due_date: New due date (natural language like "tomorrow" or ISO format).
 
     Returns:
         Confirmation message or error if task not found.
@@ -82,7 +95,7 @@ def update_task_tool(
 
     status_enum = TaskStatus(status.lower()) if status else None
     priority_enum = TaskPriority(priority.lower()) if priority else None
-    due_dt = datetime.fromisoformat(due_date) if due_date else None
+    due_dt = parse_date(due_date) if due_date else None
 
     task = update_task(
         session,
@@ -104,8 +117,9 @@ def update_task_tool(
 def _format_task_line(task: Task, indent: int = 0) -> str:
     """Format a single task line with optional indentation."""
     prefix = "  └─ " if indent > 0 else ""
+    project_emoji = task.project.emoji + " " if task.project else ""
     due = f" (due: {task.due_date.strftime('%Y-%m-%d')})" if task.due_date else ""
-    return f"{prefix}#{task.id}: {task.title} [{task.status.value}]{due}"
+    return f"{prefix}#{task.id}: {project_emoji}{task.title} [{task.status.value}]{due}"
 
 
 def _format_task_with_subtasks(task: Task, session, indent: int = 0) -> list[str]:
@@ -117,23 +131,35 @@ def _format_task_with_subtasks(task: Task, session, indent: int = 0) -> list[str
     return lines
 
 
-def list_tasks(status: Optional[str] = None, include_subtasks: bool = True) -> str:
-    """List tasks, optionally filtered by status.
+def list_tasks(
+    status: Optional[str] = None,
+    project: Optional[str] = None,
+    include_subtasks: bool = True,
+) -> str:
+    """List tasks, optionally filtered by status and/or project.
 
     Args:
         status: Filter by status (todo/in_progress/done/cancelled). If not provided, lists all.
+        project: Filter by project name (Work/Personal/Health/Finance/Social/Learning).
         include_subtasks: If True, show subtasks nested under their parents. Default True.
 
     Returns:
-        Formatted list of tasks with IDs prefixed by # for clarity.
+        Formatted list of tasks with IDs prefixed by # and project emoji.
     """
     session = get_session()
 
     status_enum = TaskStatus(status.lower()) if status else None
+    
+    # Resolve project filter
+    project_id = None
+    if project:
+        proj = get_project_by_name(session, project)
+        if proj:
+            project_id = proj.id
 
     if include_subtasks:
         # Get only root tasks (no parent) and show hierarchy
-        tasks = list_tasks_by_status(session, status_enum, root_only=True)
+        tasks = list_tasks_by_status(session, status_enum, root_only=True, project_id=project_id)
         if not tasks:
             session.close()
             return "No tasks found."
@@ -143,7 +169,7 @@ def list_tasks(status: Optional[str] = None, include_subtasks: bool = True) -> s
             lines.extend(_format_task_with_subtasks(task, session))
     else:
         # Flat list of all tasks
-        tasks = list_tasks_by_status(session, status_enum)
+        tasks = list_tasks_by_status(session, status_enum, project_id=project_id)
         if not tasks:
             session.close()
             return "No tasks found."
@@ -203,6 +229,9 @@ def get_task_details(task_id: int) -> str:
         f"Priority: {task.priority.value}",
     ]
 
+    if task.project:
+        lines.append(f"Project: {task.project.emoji} {task.project.name}")
+
     if task.parent_id:
         parent = get_task(session, task.parent_id)
         if parent:
@@ -261,7 +290,7 @@ def add_subtask(
         title: Title of the subtask.
         description: Optional description.
         priority: Priority (low/medium/high/urgent). Defaults to medium.
-        due_date: Due date in ISO format.
+        due_date: Due date (natural language like "tomorrow" or ISO format).
 
     Returns:
         Confirmation message with the created subtask ID.
@@ -275,7 +304,7 @@ def add_subtask(
         return f"Parent task #{parent_id} not found."
 
     priority_enum = TaskPriority(priority.lower()) if priority else TaskPriority.MEDIUM
-    due_dt = datetime.fromisoformat(due_date) if due_date else None
+    due_dt = parse_date(due_date) if due_date else None
 
     task = create_task(
         session,
@@ -336,3 +365,20 @@ def move_task(task_id: int, new_parent_id: Optional[int] = None) -> str:
         update_task(session, task_id, clear_parent=True)
         session.close()
         return f"Made task #{task_id} a root task (no parent)"
+
+
+def list_projects() -> str:
+    """List all available projects for task categorization.
+
+    Returns:
+        List of projects with their emojis.
+    """
+    session = get_session()
+    projects = db_list_projects(session)
+    session.close()
+
+    if not projects:
+        return "No projects found."
+
+    lines = [f"{p.emoji} {p.name}" for p in projects]
+    return "\n".join(lines)

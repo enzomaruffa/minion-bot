@@ -3,7 +3,7 @@ import logging
 from src.config import settings
 from src.db import init_database
 from src.scheduler import add_cron_job, add_interval_job, start_scheduler, shutdown_scheduler
-from src.scheduler.jobs import morning_summary, eod_review, deliver_reminders
+from src.scheduler.jobs import morning_summary, eod_review, deliver_reminders, proactive_intelligence
 from src.telegram.bot import create_application
 
 logging.basicConfig(
@@ -23,6 +23,9 @@ def register_jobs() -> None:
 
     # Reminder delivery every minute
     add_interval_job(deliver_reminders, minutes=1, job_id="reminder_delivery")
+    
+    # Proactive intelligence every 4 hours
+    add_interval_job(proactive_intelligence, hours=4, job_id="proactive_intelligence")
 
 
 async def post_init(application) -> None:

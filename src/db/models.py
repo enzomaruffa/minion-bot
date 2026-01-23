@@ -24,6 +24,17 @@ class TaskPriority(str, Enum):
     URGENT = "urgent"
 
 
+class Project(Base):
+    __tablename__ = "projects"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    emoji: Mapped[str] = mapped_column(String(10))
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+    tasks: Mapped[list["Task"]] = relationship(back_populates="project")
+
+
 class Task(Base):
     __tablename__ = "tasks"
 
@@ -34,6 +45,7 @@ class Task(Base):
     priority: Mapped[TaskPriority] = mapped_column(default=TaskPriority.MEDIUM)
     due_date: Mapped[Optional[datetime]] = mapped_column(nullable=True)
     parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tasks.id"), nullable=True)
+    project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         default=datetime.utcnow, onupdate=datetime.utcnow
@@ -45,6 +57,7 @@ class Task(Base):
     subtasks: Mapped[list["Task"]] = relationship("Task", back_populates="parent")
     attachments: Mapped[list["Attachment"]] = relationship(back_populates="task")
     reminders: Mapped[list["Reminder"]] = relationship(back_populates="task")
+    project: Mapped[Optional["Project"]] = relationship(back_populates="tasks")
 
 
 class Attachment(Base):

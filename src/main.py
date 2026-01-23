@@ -25,7 +25,7 @@ def register_jobs() -> None:
     add_interval_job(deliver_reminders, minutes=1, job_id="reminder_delivery")
     
     # Proactive intelligence every 4 hours
-    add_interval_job(proactive_intelligence, hours=4, job_id="proactive_intelligence")
+    add_interval_job(proactive_intelligence, minutes=240, job_id="proactive_intelligence")
 
 
 async def post_init(application) -> None:

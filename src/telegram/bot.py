@@ -19,6 +19,7 @@ from src.telegram.commands import (
 
 from src.config import settings
 from src.agent import chat
+from src.integrations.voice import transcribe_voice
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,40 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
 
 
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle incoming voice messages."""
+    if not update.message or not update.message.voice:
+        return
+
+    user_id = update.effective_user.id if update.effective_user else None
+    if not user_id or not is_authorized(user_id):
+        await update.message.reply_text("Sorry, you're not authorized to use this bot.")
+        return
+
+    logger.info("Received voice message, transcribing...")
+
+    try:
+        # Download the voice file
+        voice = update.message.voice
+        file = await context.bot.get_file(voice.file_id)
+        audio_data = await file.download_as_bytearray()
+
+        # Transcribe
+        transcript = transcribe_voice(bytes(audio_data), "voice.ogg")
+        logger.info(f"Transcribed: {transcript[:50]}...")
+
+        # Send transcript and process with agent
+        await update.message.reply_text(f"_Heard: {transcript}_", parse_mode="Markdown")
+
+        response = await chat(transcript)
+        await update.message.reply_text(response, parse_mode="Markdown")
+    except Exception as e:
+        logger.exception("Error processing voice message")
+        await update.message.reply_text(
+            f"Sorry, I couldn't process that voice message: {str(e)[:100]}"
+        )
+
+
 def create_application() -> Application:
     """Create and configure the Telegram application."""
     application = Application.builder().token(settings.telegram_bot_token).build()
@@ -67,6 +102,9 @@ def create_application() -> Application:
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
     )
+
+    # Add voice message handler
+    application.add_handler(MessageHandler(filters.VOICE, handle_voice))
 
     return application
 

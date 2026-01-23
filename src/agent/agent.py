@@ -1,4 +1,5 @@
 from agno.agent import Agent
+from agno.db.sqlite import SqliteDb
 from agno.models.openai import OpenAIChat
 
 from src.config import settings
@@ -34,6 +35,19 @@ Always confirm actions taken.
 Current timezone: America/Sao_Paulo
 """
 
+# Session database for agent memory
+_db: SqliteDb | None = None
+
+
+def get_db() -> SqliteDb:
+    """Get or create the session database."""
+    global _db
+    if _db is None:
+        db_path = settings.database_path.parent / "agent_sessions.db"
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        _db = SqliteDb(db_file=str(db_path))
+    return _db
+
 
 def create_agent() -> Agent:
     """Create and configure the Minion agent."""
@@ -56,6 +70,10 @@ def create_agent() -> Agent:
         ],
         instructions=SYSTEM_PROMPT,
         markdown=True,
+        db=get_db(),
+        add_history_to_context=True,
+        num_history_runs=10,
+        enable_user_memories=True,
     )
 
 
@@ -71,8 +89,16 @@ def get_agent() -> Agent:
     return _agent
 
 
+# Fixed session ID for single-user bot
+SESSION_ID = f"user_{settings.telegram_user_id}"
+
+
 async def chat(message: str) -> str:
     """Send a message to the agent and get a response."""
     agent = get_agent()
-    response = agent.run(message)
+    response = agent.run(
+        message,
+        user_id=str(settings.telegram_user_id),
+        session_id=SESSION_ID,
+    )
     return response.content

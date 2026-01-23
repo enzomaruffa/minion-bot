@@ -4,8 +4,13 @@ from telegram.ext import ContextTypes
 from src.agent.tools import get_agenda, list_tasks
 from src.config import settings
 from src.db import get_session
-from src.db.models import TaskStatus
-from src.db.queries import list_calendar_events_range, list_tasks_by_status, update_task
+from src.db.models import ShoppingListType
+from src.db.queries import (
+    list_calendar_events_range,
+    list_contacts,
+    list_shopping_items,
+    list_upcoming_birthdays,
+)
 from src.integrations.calendar import get_auth_url, complete_auth, is_calendar_connected
 from datetime import datetime, timedelta
 
@@ -31,14 +36,21 @@ async def tasks_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     in_progress = list_tasks(status="in_progress")
     todo = list_tasks(status="todo")
 
-    parts = []
+    parts = ["📋 *Tasks*", ""]
+    
     if in_progress and in_progress != "No tasks found.":
-        parts.append(f"IN PROGRESS:\n{in_progress}")
+        parts.append("🔄 *In Progress*")
+        parts.append(in_progress)
+        parts.append("")
+    
     if todo and todo != "No tasks found.":
-        parts.append(f"TODO:\n{todo}")
+        parts.append("📝 *To Do*")
+        parts.append(todo)
 
-    result = "\n\n".join(parts) if parts else "No tasks found."
-    await update.message.reply_text(result)
+    if len(parts) == 2:  # Only header
+        parts.append("_No pending tasks!_ 🎉")
+
+    await update.message.reply_text("\n".join(parts), parse_mode="Markdown")
 
 
 async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -51,37 +63,11 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text("Not authorized.")
         return
 
+    today_str = datetime.now().strftime("%A, %b %d")
     result = get_agenda()
-    await update.message.reply_text(result)
-
-
-async def done_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle /done command - mark most recent in-progress task as done."""
-    if not update.message:
-        return
-
-    user_id = update.effective_user.id if update.effective_user else None
-    if not user_id or not is_authorized(user_id):
-        await update.message.reply_text("Not authorized.")
-        return
-
-    session = get_session()
-    tasks = list_tasks_by_status(session, TaskStatus.IN_PROGRESS)
-
-    if not tasks:
-        tasks = list_tasks_by_status(session, TaskStatus.TODO)
-
-    if not tasks:
-        await update.message.reply_text("No pending tasks to mark as done.")
-        session.close()
-        return
-
-    # Get the most recent task
-    task = tasks[0]
-    update_task(session, task.id, status=TaskStatus.DONE)
-    session.close()
-
-    await update.message.reply_text(f"Marked as done: {task.title}")
+    
+    formatted = f"📅 *{today_str}*\n\n{result}"
+    await update.message.reply_text(formatted, parse_mode="Markdown")
 
 
 async def calendar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -102,15 +88,24 @@ async def calendar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     session.close()
 
     if not events:
-        await update.message.reply_text("No upcoming events in the next 7 days.")
+        await update.message.reply_text("📆 _No events in the next 7 days._", parse_mode="Markdown")
         return
 
-    lines = ["Upcoming events:"]
+    lines = ["📆 *Upcoming Events*", ""]
+    
+    current_day = None
     for event in events:
-        date_str = event.start_time.strftime("%a %d %b %H:%M")
-        lines.append(f"  {date_str}: {event.title}")
+        event_day = event.start_time.strftime("%A, %b %d")
+        if event_day != current_day:
+            if current_day is not None:
+                lines.append("")
+            lines.append(f"*{event_day}*")
+            current_day = event_day
+        
+        time_str = event.start_time.strftime("%H:%M")
+        lines.append(f"  {time_str} — {event.title}")
 
-    await update.message.reply_text("\n".join(lines))
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
 
 async def auth_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -179,24 +174,218 @@ def cancel_auth() -> None:
     _awaiting_auth_code = False
 
 
+async def contacts_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /contacts command - list all contacts."""
+    if not update.message:
+        return
+
+    user_id = update.effective_user.id if update.effective_user else None
+    if not user_id or not is_authorized(user_id):
+        await update.message.reply_text("Not authorized.")
+        return
+
+    session = get_session()
+    contacts = list_contacts(session)
+    session.close()
+
+    if not contacts:
+        await update.message.reply_text("📇 No contacts saved yet.")
+        return
+
+    lines = ["📇 *Contacts*", ""]
+    for contact in contacts:
+        alias_info = f" _{contact.aliases}_" if contact.aliases else ""
+        bday_info = f" 🎂 {contact.birthday.strftime('%b %d')}" if contact.birthday else ""
+        lines.append(f"• *{contact.name}*{alias_info}{bday_info}")
+
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+
+async def birthdays_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /birthdays command - show upcoming birthdays."""
+    if not update.message:
+        return
+
+    user_id = update.effective_user.id if update.effective_user else None
+    if not user_id or not is_authorized(user_id):
+        await update.message.reply_text("Not authorized.")
+        return
+
+    session = get_session()
+    contacts = list_upcoming_birthdays(session, within_days=30)
+    session.close()
+
+    if not contacts:
+        await update.message.reply_text("🎂 No birthdays in the next 30 days.")
+        return
+
+    lines = ["🎂 *Upcoming Birthdays*", ""]
+    today = datetime.now().date()
+
+    for contact in contacts:
+        if contact.birthday:
+            bday = contact.birthday.date() if hasattr(contact.birthday, 'date') else contact.birthday
+            this_year_bday = bday.replace(year=today.year)
+            if this_year_bday < today:
+                this_year_bday = bday.replace(year=today.year + 1)
+            days_until = (this_year_bday - today).days
+
+            if days_until == 0:
+                when = "🔴 TODAY!"
+            elif days_until == 1:
+                when = "🟠 tomorrow"
+            elif days_until <= 7:
+                when = f"🟡 in {days_until} days"
+            else:
+                when = f"in {days_until} days"
+
+            lines.append(f"• *{contact.name}* — {this_year_bday.strftime('%b %d')} ({when})")
+
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+
+def _format_shopping_list(items, list_type: ShoppingListType, emoji: str, title: str) -> str:
+    """Format a shopping list for display."""
+    filtered = [i for i in items if i.shopping_list.list_type == list_type]
+    
+    if not filtered:
+        return f"{emoji} *{title}*\n_Empty_"
+
+    unchecked = [i for i in filtered if not i.checked]
+    checked = [i for i in filtered if i.checked]
+
+    lines = [f"{emoji} *{title}*", ""]
+    
+    for item in unchecked:
+        recipient = ""
+        if item.contact:
+            recipient = f" → {item.contact.name}"
+        elif item.recipient:
+            recipient = f" → {item.recipient}"
+        notes = f" _({item.notes})_" if item.notes else ""
+        lines.append(f"⬜ {item.name}{recipient}{notes}")
+
+    if checked:
+        lines.append("")
+        lines.append(f"_Checked ({len(checked)}):_")
+        for item in checked[:3]:  # Show max 3 checked
+            lines.append(f"  ☑️ ~{item.name}~")
+        if len(checked) > 3:
+            lines.append(f"  _...and {len(checked) - 3} more_")
+
+    return "\n".join(lines)
+
+
+async def groceries_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /groceries command - show groceries list."""
+    if not update.message:
+        return
+
+    user_id = update.effective_user.id if update.effective_user else None
+    if not user_id or not is_authorized(user_id):
+        await update.message.reply_text("Not authorized.")
+        return
+
+    session = get_session()
+    items = list_shopping_items(session, ShoppingListType.GROCERIES, include_checked=True)
+    result = _format_shopping_list(items, ShoppingListType.GROCERIES, "🛒", "Groceries")
+    session.close()
+
+    await update.message.reply_text(result, parse_mode="Markdown")
+
+
+async def gifts_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /gifts command - show gifts list."""
+    if not update.message:
+        return
+
+    user_id = update.effective_user.id if update.effective_user else None
+    if not user_id or not is_authorized(user_id):
+        await update.message.reply_text("Not authorized.")
+        return
+
+    session = get_session()
+    items = list_shopping_items(session, ShoppingListType.GIFTS, include_checked=True)
+    result = _format_shopping_list(items, ShoppingListType.GIFTS, "🎁", "Gift Ideas")
+    session.close()
+
+    await update.message.reply_text(result, parse_mode="Markdown")
+
+
+async def wishlist_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /wishlist command - show wishlist."""
+    if not update.message:
+        return
+
+    user_id = update.effective_user.id if update.effective_user else None
+    if not user_id or not is_authorized(user_id):
+        await update.message.reply_text("Not authorized.")
+        return
+
+    session = get_session()
+    items = list_shopping_items(session, ShoppingListType.WISHLIST, include_checked=True)
+    result = _format_shopping_list(items, ShoppingListType.WISHLIST, "✨", "Wishlist")
+    session.close()
+
+    await update.message.reply_text(result, parse_mode="Markdown")
+
+
+async def lists_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /lists command - show all shopping lists."""
+    if not update.message:
+        return
+
+    user_id = update.effective_user.id if update.effective_user else None
+    if not user_id or not is_authorized(user_id):
+        await update.message.reply_text("Not authorized.")
+        return
+
+    session = get_session()
+    all_items = list_shopping_items(session, include_checked=True)
+    
+    parts = []
+    for lt, emoji, title in [
+        (ShoppingListType.GROCERIES, "🛒", "Groceries"),
+        (ShoppingListType.GIFTS, "🎁", "Gift Ideas"),
+        (ShoppingListType.WISHLIST, "✨", "Wishlist"),
+    ]:
+        parts.append(_format_shopping_list(all_items, lt, emoji, title))
+    
+    session.close()
+    
+    await update.message.reply_text("\n\n".join(parts), parse_mode="Markdown")
+
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /help command - show available commands."""
     if not update.message:
         return
 
-    calendar_status = "✓ connected" if is_calendar_connected() else "✗ not connected (/auth)"
+    calendar_status = "✓" if is_calendar_connected() else "✗ (/auth)"
 
-    help_text = f"""*Available commands:*
+    help_text = f"""📋 *Commands*
 
-/tasks - List pending tasks
-/today - Show today's agenda
-/done - Mark recent task as complete
-/calendar - Show upcoming events
-/auth - Connect Google Calendar
-/help - Show this help
+*Tasks & Agenda*
+/tasks — pending tasks
+/today — today's agenda
+/calendar — upcoming events
 
-*Google Calendar:* {calendar_status}
+*Shopping Lists*
+/lists — all lists
+/groceries — grocery items
+/gifts — gift ideas
+/wishlist — wishlist
 
-Or just send a message and I'll help you manage your tasks and reminders!
-"""
+*Contacts*
+/contacts — all contacts
+/birthdays — upcoming birthdays
+
+*Settings*
+/auth — connect Google Calendar
+/help — this help
+
+─────────────────
+📅 Calendar: {calendar_status}
+
+_Or just chat with me!_"""
     await update.message.reply_text(help_text, parse_mode="Markdown")

@@ -13,12 +13,17 @@ from telegram.ext import (
 from src.telegram.commands import (
     tasks_command,
     today_command,
-    done_command,
     calendar_command,
     help_command,
     auth_command,
     handle_auth_code,
     is_awaiting_auth_code,
+    contacts_command,
+    birthdays_command,
+    groceries_command,
+    gifts_command,
+    wishlist_command,
+    lists_command,
 )
 
 from src.config import settings
@@ -160,11 +165,15 @@ async def register_commands(application: Application) -> None:
     from telegram import BotCommand
     
     commands = [
-        BotCommand("tasks", "List pending tasks"),
-        BotCommand("today", "Show today's agenda"),
-        BotCommand("done", "Mark recent task as complete"),
-        BotCommand("calendar", "Show upcoming events"),
-        BotCommand("auth", "Connect Google Calendar"),
+        BotCommand("tasks", "Pending tasks"),
+        BotCommand("today", "Today's agenda"),
+        BotCommand("calendar", "Upcoming events"),
+        BotCommand("lists", "All shopping lists"),
+        BotCommand("groceries", "Grocery list"),
+        BotCommand("gifts", "Gift ideas"),
+        BotCommand("wishlist", "Wishlist"),
+        BotCommand("contacts", "All contacts"),
+        BotCommand("birthdays", "Upcoming birthdays"),
         BotCommand("help", "Show help"),
     ]
     await application.bot.set_my_commands(commands)
@@ -178,11 +187,18 @@ def create_application() -> Application:
     # Add command handlers
     application.add_handler(CommandHandler("tasks", tasks_command))
     application.add_handler(CommandHandler("today", today_command))
-    application.add_handler(CommandHandler("done", done_command))
     application.add_handler(CommandHandler("calendar", calendar_command))
     application.add_handler(CommandHandler("auth", auth_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("start", help_command))
+    # Shopping list commands
+    application.add_handler(CommandHandler("lists", lists_command))
+    application.add_handler(CommandHandler("groceries", groceries_command))
+    application.add_handler(CommandHandler("gifts", gifts_command))
+    application.add_handler(CommandHandler("wishlist", wishlist_command))
+    # Contact commands
+    application.add_handler(CommandHandler("contacts", contacts_command))
+    application.add_handler(CommandHandler("birthdays", birthdays_command))
 
     # Add message handler for text messages
     application.add_handler(

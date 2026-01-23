@@ -1,6 +1,8 @@
 from agno.agent import Agent
 from agno.db.sqlite import SqliteDb
+from agno.memory import MemoryManager
 from agno.models.openai import OpenAIChat
+from agno.tools.reasoning import ReasoningTools
 
 from src.config import settings
 from src.agent.tools import (
@@ -49,6 +51,22 @@ def get_db() -> SqliteDb:
     return _db
 
 
+def get_memory_manager() -> MemoryManager:
+    """Create a memory manager with custom instructions."""
+    return MemoryManager(
+        model=OpenAIChat(id="gpt-4o-mini", api_key=settings.openai_api_key),
+        db=get_db(),
+        additional_instructions="""
+        Focus on remembering:
+        - User preferences and habits
+        - Recurring tasks and schedules
+        - Important dates and deadlines
+        - Project context and goals
+        Do NOT store sensitive information like passwords or API keys.
+        """,
+    )
+
+
 def create_agent() -> Agent:
     """Create and configure the Minion agent."""
     return Agent(
@@ -57,23 +75,38 @@ def create_agent() -> Agent:
             api_key=settings.openai_api_key,
         ),
         tools=[
+            # Reasoning tools for better problem solving
+            ReasoningTools(add_instructions=True),
+            # Task management tools
             add_tasks,
             update_task_tool,
             list_tasks,
             search_tasks_tool,
             get_task_details,
             delete_task_tool,
+            # Reminder tools
             set_reminder,
             list_reminders,
             cancel_reminder,
+            # Agenda tool
             get_agenda,
         ],
         instructions=SYSTEM_PROMPT,
         markdown=True,
+        # Database for persistence
         db=get_db(),
+        # Memory configuration
+        memory_manager=get_memory_manager(),
+        enable_user_memories=True,
+        enable_agentic_memory=True,
+        add_memories_to_context=True,
+        # Session history
         add_history_to_context=True,
         num_history_runs=10,
-        enable_user_memories=True,
+        read_chat_history=True,
+        max_tool_calls_from_history=5,
+        # Context enhancements
+        add_datetime_to_context=True,
     )
 
 

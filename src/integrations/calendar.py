@@ -42,7 +42,7 @@ def get_auth_url() -> Optional[str]:
         )
         
         auth_url, _ = _pending_flow.authorization_url(
-            prompt="consent",
+            prompt="select_account consent",
             access_type="offline",  # Get refresh token
         )
         logger.info("Generated OAuth URL successfully")

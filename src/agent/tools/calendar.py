@@ -1,0 +1,193 @@
+from datetime import datetime, timedelta
+from typing import Optional
+
+from src.integrations.calendar import (
+    test_connection,
+    create_event,
+    update_event,
+    delete_event,
+    list_upcoming_events,
+    is_calendar_connected,
+)
+from src.utils import parse_date
+from src.config import settings
+
+
+def test_calendar() -> str:
+    """Test the Google Calendar connection.
+
+    Returns:
+        Connection status and calendar info.
+    """
+    result = test_connection()
+    
+    if result["ok"]:
+        return (
+            f"✓ Calendar connected!\n"
+            f"Calendar: {result['calendar_name']}\n"
+            f"Timezone: {result['timezone']}"
+        )
+    else:
+        return f"✗ Calendar not connected: {result['error']}"
+
+
+def create_calendar_event(
+    title: str,
+    start: str,
+    end: Optional[str] = None,
+    duration_minutes: Optional[int] = 60,
+    description: Optional[str] = None,
+    location: Optional[str] = None,
+) -> str:
+    """Create a new calendar event.
+
+    Args:
+        title: Event title/summary.
+        start: Start time (natural language like "tomorrow at 3pm" or ISO format).
+        end: End time (optional - if not provided, uses duration_minutes).
+        duration_minutes: Duration in minutes if end not specified. Default 60.
+        description: Optional event description.
+        location: Optional event location.
+
+    Returns:
+        Confirmation with event details or error message.
+    """
+    if not is_calendar_connected():
+        return "Calendar not connected. Use /auth to connect Google Calendar."
+    
+    start_dt = parse_date(start)
+    if not start_dt:
+        return f"Could not parse start time: {start}"
+    
+    if end:
+        end_dt = parse_date(end)
+        if not end_dt:
+            return f"Could not parse end time: {end}"
+    else:
+        end_dt = start_dt + timedelta(minutes=duration_minutes or 60)
+    
+    result = create_event(
+        title=title,
+        start=start_dt,
+        end=end_dt,
+        description=description,
+        location=location,
+    )
+    
+    if result:
+        return (
+            f"✓ Event created: {title}\n"
+            f"When: {start_dt.strftime('%a %b %d, %H:%M')} - {end_dt.strftime('%H:%M')}\n"
+            f"ID: {result['id']}"
+        )
+    else:
+        return "Failed to create event. Check calendar connection."
+
+
+def update_calendar_event(
+    event_id: str,
+    title: Optional[str] = None,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    description: Optional[str] = None,
+    location: Optional[str] = None,
+) -> str:
+    """Update an existing calendar event.
+
+    Args:
+        event_id: The Google Calendar event ID.
+        title: New title (optional).
+        start: New start time (optional).
+        end: New end time (optional).
+        description: New description (optional).
+        location: New location (optional).
+
+    Returns:
+        Confirmation or error message.
+    """
+    if not is_calendar_connected():
+        return "Calendar not connected. Use /auth to connect Google Calendar."
+    
+    start_dt = parse_date(start) if start else None
+    end_dt = parse_date(end) if end else None
+    
+    result = update_event(
+        event_id=event_id,
+        title=title,
+        start=start_dt,
+        end=end_dt,
+        description=description,
+        location=location,
+    )
+    
+    if result:
+        return f"✓ Event updated: {result['id']}"
+    else:
+        return f"Failed to update event {event_id}. Check if it exists."
+
+
+def delete_calendar_event(event_id: str) -> str:
+    """Delete a calendar event.
+
+    Args:
+        event_id: The Google Calendar event ID.
+
+    Returns:
+        Confirmation or error message.
+    """
+    if not is_calendar_connected():
+        return "Calendar not connected. Use /auth to connect Google Calendar."
+    
+    if delete_event(event_id):
+        return f"✓ Event deleted: {event_id}"
+    else:
+        return f"Failed to delete event {event_id}. Check if it exists."
+
+
+def list_calendar_events(days: int = 7) -> str:
+    """List upcoming calendar events.
+
+    Args:
+        days: Number of days to look ahead. Default 7.
+
+    Returns:
+        Formatted list of upcoming events.
+    """
+    if not is_calendar_connected():
+        return "Calendar not connected. Use /auth to connect Google Calendar."
+    
+    events = list_upcoming_events(days=days)
+    
+    if not events:
+        return f"No events in the next {days} days."
+    
+    lines = [f"📅 Upcoming events ({days} days):"]
+    
+    current_date = None
+    for event in events:
+        # Parse start time
+        start_data = event.get("start", {})
+        if "dateTime" in start_data:
+            start = datetime.fromisoformat(start_data["dateTime"].replace("Z", "+00:00"))
+            time_str = start.strftime("%H:%M")
+            is_all_day = False
+        else:
+            start = datetime.fromisoformat(start_data.get("date", ""))
+            time_str = "All day"
+            is_all_day = True
+        
+        # Group by date
+        date_str = start.strftime("%a %b %d")
+        if date_str != current_date:
+            current_date = date_str
+            lines.append(f"\n**{date_str}**")
+        
+        title = event.get("summary", "Untitled")
+        event_id = event.get("id", "")[:12]  # Truncate ID for display
+        
+        if is_all_day:
+            lines.append(f"  • {title} (all day) [{event_id}]")
+        else:
+            lines.append(f"  • {time_str} - {title} [{event_id}]")
+    
+    return "\n".join(lines)

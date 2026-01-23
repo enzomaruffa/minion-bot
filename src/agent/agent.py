@@ -42,6 +42,11 @@ from src.agent.tools import (
     list_reminders,
     cancel_reminder,
     get_agenda,
+    test_calendar,
+    create_calendar_event,
+    update_calendar_event,
+    delete_calendar_event,
+    list_calendar_events,
 )
 
 SYSTEM_PROMPT = """You are Minion, a personal assistant bot helping manage tasks, reminders, and calendar.
@@ -169,6 +174,12 @@ def create_agent() -> Agent:
             cancel_reminder,
             # Agenda tool
             get_agenda,
+            # Calendar tools
+            test_calendar,
+            create_calendar_event,
+            update_calendar_event,
+            delete_calendar_event,
+            list_calendar_events,
         ],
         instructions=SYSTEM_PROMPT,
         markdown=True,

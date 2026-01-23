@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from google.auth.transport.requests import Request
@@ -13,7 +13,7 @@ from src.db.queries import sync_calendar_event
 
 logger = logging.getLogger(__name__)
 
-SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
+SCOPES = ["https://www.googleapis.com/auth/calendar"]  # Full read/write access
 
 # Store pending auth flow for bot-based authentication
 _pending_flow: Optional[InstalledAppFlow] = None
@@ -216,12 +216,45 @@ def sync_events(start: datetime, end: datetime) -> int:
     return count
 
 
+def get_service():
+    """Get Google Calendar service object."""
+    creds = get_credentials()
+    if not creds:
+        return None
+    return build("calendar", "v3", credentials=creds)
+
+
+def test_connection() -> dict:
+    """Test the calendar connection.
+    
+    Returns:
+        Dict with status and calendar info, or error message.
+    """
+    try:
+        service = get_service()
+        if not service:
+            return {"ok": False, "error": "Not authenticated. Use /auth to connect."}
+        
+        # Try to get calendar info
+        calendar = service.calendars().get(calendarId="primary").execute()
+        
+        return {
+            "ok": True,
+            "calendar_name": calendar.get("summary", "Primary"),
+            "timezone": calendar.get("timeZone", "Unknown"),
+        }
+    except Exception as e:
+        logger.exception(f"Calendar connection test failed: {e}")
+        return {"ok": False, "error": str(e)}
+
+
 def create_event(
     title: str,
     start: datetime,
     end: datetime,
     description: Optional[str] = None,
-) -> Optional[str]:
+    location: Optional[str] = None,
+) -> Optional[dict]:
     """Create a new calendar event.
 
     Args:
@@ -229,15 +262,14 @@ def create_event(
         start: Event start time.
         end: Event end time.
         description: Optional event description.
+        location: Optional event location.
 
     Returns:
-        Google event ID if successful, None otherwise.
+        Event dict with id and htmlLink if successful, None otherwise.
     """
-    creds = get_credentials()
-    if not creds:
+    service = get_service()
+    if not service:
         return None
-
-    service = build("calendar", "v3", credentials=creds)
 
     event = {
         "summary": title,
@@ -247,6 +279,134 @@ def create_event(
 
     if description:
         event["description"] = description
+    if location:
+        event["location"] = location
 
     result = service.events().insert(calendarId="primary", body=event).execute()
-    return result.get("id")
+    return {"id": result.get("id"), "link": result.get("htmlLink")}
+
+
+def update_event(
+    event_id: str,
+    title: Optional[str] = None,
+    start: Optional[datetime] = None,
+    end: Optional[datetime] = None,
+    description: Optional[str] = None,
+    location: Optional[str] = None,
+) -> Optional[dict]:
+    """Update an existing calendar event.
+
+    Args:
+        event_id: Google event ID.
+        title: New title (optional).
+        start: New start time (optional).
+        end: New end time (optional).
+        description: New description (optional).
+        location: New location (optional).
+
+    Returns:
+        Updated event dict if successful, None otherwise.
+    """
+    service = get_service()
+    if not service:
+        return None
+
+    try:
+        # Get existing event
+        event = service.events().get(calendarId="primary", eventId=event_id).execute()
+        
+        # Update fields
+        if title:
+            event["summary"] = title
+        if description is not None:
+            event["description"] = description
+        if location is not None:
+            event["location"] = location
+        if start:
+            event["start"] = {"dateTime": start.isoformat(), "timeZone": str(settings.timezone)}
+        if end:
+            event["end"] = {"dateTime": end.isoformat(), "timeZone": str(settings.timezone)}
+        
+        result = service.events().update(calendarId="primary", eventId=event_id, body=event).execute()
+        return {"id": result.get("id"), "link": result.get("htmlLink")}
+    except Exception as e:
+        logger.exception(f"Failed to update event: {e}")
+        return None
+
+
+def delete_event(event_id: str) -> bool:
+    """Delete a calendar event.
+
+    Args:
+        event_id: Google event ID.
+
+    Returns:
+        True if successful, False otherwise.
+    """
+    service = get_service()
+    if not service:
+        return False
+
+    try:
+        service.events().delete(calendarId="primary", eventId=event_id).execute()
+        return True
+    except Exception as e:
+        logger.exception(f"Failed to delete event: {e}")
+        return False
+
+
+def get_event(event_id: str) -> Optional[dict]:
+    """Get a single calendar event by ID.
+
+    Args:
+        event_id: Google event ID.
+
+    Returns:
+        Event dict if found, None otherwise.
+    """
+    service = get_service()
+    if not service:
+        return None
+
+    try:
+        event = service.events().get(calendarId="primary", eventId=event_id).execute()
+        return event
+    except Exception as e:
+        logger.exception(f"Failed to get event: {e}")
+        return None
+
+
+def list_upcoming_events(days: int = 7, max_results: int = 20) -> list[dict]:
+    """List upcoming calendar events.
+
+    Args:
+        days: Number of days to look ahead.
+        max_results: Maximum number of events to return.
+
+    Returns:
+        List of event dictionaries.
+    """
+    service = get_service()
+    if not service:
+        return []
+
+    now = datetime.utcnow()
+    end = now + timedelta(days=days)
+
+    try:
+        events_result = (
+            service.events()
+            .list(
+                calendarId="primary",
+                timeMin=now.isoformat() + "Z",
+                timeMax=end.isoformat() + "Z",
+                maxResults=max_results,
+                singleEvents=True,
+                orderBy="startTime",
+            )
+            .execute()
+        )
+        return events_result.get("items", [])
+    except Exception as e:
+        logger.exception(f"Failed to list events: {e}")
+        return []

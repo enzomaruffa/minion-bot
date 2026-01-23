@@ -15,6 +15,13 @@ from .reminders import (
     cancel_reminder,
 )
 from .agenda import get_agenda
+from .calendar import (
+    test_calendar,
+    create_calendar_event,
+    update_calendar_event,
+    delete_calendar_event,
+    list_calendar_events,
+)
 
 __all__ = [
     "add_tasks",
@@ -30,4 +37,9 @@ __all__ = [
     "list_reminders",
     "cancel_reminder",
     "get_agenda",
+    "test_calendar",
+    "create_calendar_event",
+    "update_calendar_event",
+    "delete_calendar_event",
+    "list_calendar_events",
 ]

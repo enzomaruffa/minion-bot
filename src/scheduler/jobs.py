@@ -5,7 +5,7 @@ from src.agent.tools.agenda import get_agenda
 from src.config import settings
 from src.db import get_session
 from src.db.models import TaskStatus
-from src.db.queries import list_tasks_by_status
+from src.db.queries import list_tasks_by_status, list_pending_reminders, mark_reminder_delivered
 from src.telegram.bot import send_message
 
 logger = logging.getLogger(__name__)
@@ -80,3 +80,29 @@ async def eod_review() -> None:
         logger.info("EOD review sent")
     except Exception as e:
         logger.exception(f"Error sending EOD review: {e}")
+
+
+async def deliver_reminders() -> None:
+    """Check and deliver due reminders."""
+    try:
+        session = get_session()
+        now = datetime.now(settings.timezone).replace(tzinfo=None)
+
+        # Get reminders due up to now
+        reminders = list_pending_reminders(session, now)
+
+        for reminder in reminders:
+            try:
+                message = f"Reminder: {reminder.message}"
+                if reminder.task_id:
+                    message += f" (task #{reminder.task_id})"
+
+                await send_message(message)
+                mark_reminder_delivered(session, reminder.id)
+                logger.info(f"Delivered reminder #{reminder.id}")
+            except Exception as e:
+                logger.exception(f"Error delivering reminder #{reminder.id}: {e}")
+
+        session.close()
+    except Exception as e:
+        logger.exception(f"Error in reminder delivery job: {e}")

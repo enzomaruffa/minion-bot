@@ -11,6 +11,7 @@ from .reminders import (
     list_reminders,
     cancel_reminder,
 )
+from .agenda import get_agenda
 
 __all__ = [
     "add_tasks",
@@ -22,4 +23,5 @@ __all__ = [
     "set_reminder",
     "list_reminders",
     "cancel_reminder",
+    "get_agenda",
 ]

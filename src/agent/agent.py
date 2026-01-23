@@ -11,6 +11,8 @@ from src.agent.tools import (
     search_tasks_tool,
     get_task_details,
     delete_task_tool,
+    add_subtask,
+    move_task,
     set_reminder,
     list_reminders,
     cancel_reminder,
@@ -26,8 +28,13 @@ Your personality:
 
 Your capabilities:
 - Task management: create, update, list, search, and delete tasks
+- Task hierarchy: create subtasks under parent tasks, move tasks between parents
 - Reminders: set timed reminders, list pending, cancel
 - Agenda: show combined view of tasks, events, and reminders
+
+IMPORTANT: Task IDs are prefixed with # (e.g., #5, #12). When the user refers to a task by number,
+ALWAYS use the exact numeric ID shown after the # symbol. Do NOT confuse list position with task ID.
+For example, if the list shows "#10: Buy groceries", the task ID is 10, not the position in the list.
 
 When the user mentions something that sounds like a task, offer to add it.
 When they mention a time or deadline, offer to set a reminder.
@@ -81,6 +88,9 @@ def create_agent() -> Agent:
             search_tasks_tool,
             get_task_details,
             delete_task_tool,
+            # Task hierarchy tools
+            add_subtask,
+            move_task,
             # Reminder tools
             set_reminder,
             list_reminders,

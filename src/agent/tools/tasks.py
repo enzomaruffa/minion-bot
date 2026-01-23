@@ -2,11 +2,12 @@ from datetime import datetime
 from typing import Optional
 
 from src.db import get_session
-from src.db.models import TaskPriority, TaskStatus
+from src.db.models import Task, TaskPriority, TaskStatus
 from src.db.queries import (
     create_task,
     delete_task,
     get_task,
+    get_subtasks,
     list_tasks_by_status,
     search_tasks,
     update_task,
@@ -19,7 +20,8 @@ def add_tasks(tasks: list[dict]) -> str:
 
     Args:
         tasks: List of task dictionaries with keys: title (required), description (optional),
-               priority (optional: low/medium/high/urgent), due_date (optional: ISO format)
+               priority (optional: low/medium/high/urgent), due_date (optional: ISO format),
+               parent_id (optional: ID of parent task for creating subtasks)
 
     Returns:
         Confirmation message with created task IDs.
@@ -39,12 +41,15 @@ def add_tasks(tasks: list[dict]) -> str:
         if due_str := task_data.get("due_date"):
             due_date = datetime.fromisoformat(due_str)
 
+        parent_id = task_data.get("parent_id")
+
         task = create_task(
             session,
             title=title,
             description=task_data.get("description"),
             priority=priority,
             due_date=due_date,
+            parent_id=parent_id,
         )
         created_ids.append(task.id)
 
@@ -96,29 +101,56 @@ def update_task_tool(
     return f"Updated task {task_id}: {task.title}"
 
 
-def list_tasks(status: Optional[str] = None) -> str:
+def _format_task_line(task: Task, indent: int = 0) -> str:
+    """Format a single task line with optional indentation."""
+    prefix = "  └─ " if indent > 0 else ""
+    due = f" (due: {task.due_date.strftime('%Y-%m-%d')})" if task.due_date else ""
+    return f"{prefix}#{task.id}: {task.title} [{task.status.value}]{due}"
+
+
+def _format_task_with_subtasks(task: Task, session, indent: int = 0) -> list[str]:
+    """Format a task and its subtasks recursively."""
+    lines = [_format_task_line(task, indent)]
+    subtasks = get_subtasks(session, task.id)
+    for subtask in subtasks:
+        lines.extend(_format_task_with_subtasks(subtask, session, indent + 1))
+    return lines
+
+
+def list_tasks(status: Optional[str] = None, include_subtasks: bool = True) -> str:
     """List tasks, optionally filtered by status.
 
     Args:
         status: Filter by status (todo/in_progress/done/cancelled). If not provided, lists all.
+        include_subtasks: If True, show subtasks nested under their parents. Default True.
 
     Returns:
-        Formatted list of tasks.
+        Formatted list of tasks with IDs prefixed by # for clarity.
     """
     session = get_session()
 
     status_enum = TaskStatus(status.lower()) if status else None
-    tasks = list_tasks_by_status(session, status_enum)
+
+    if include_subtasks:
+        # Get only root tasks (no parent) and show hierarchy
+        tasks = list_tasks_by_status(session, status_enum, root_only=True)
+        if not tasks:
+            session.close()
+            return "No tasks found."
+
+        lines = []
+        for task in tasks:
+            lines.extend(_format_task_with_subtasks(task, session))
+    else:
+        # Flat list of all tasks
+        tasks = list_tasks_by_status(session, status_enum)
+        if not tasks:
+            session.close()
+            return "No tasks found."
+
+        lines = [_format_task_line(task) for task in tasks]
+
     session.close()
-
-    if not tasks:
-        return "No tasks found."
-
-    lines = []
-    for task in tasks:
-        due = f" (due: {task.due_date.strftime('%Y-%m-%d')})" if task.due_date else ""
-        lines.append(f"[{task.id}] {task.title} - {task.status.value}{due}")
-
     return "\n".join(lines)
 
 
@@ -129,7 +161,7 @@ def search_tasks_tool(query: str) -> str:
         query: Search query to match against task titles and descriptions.
 
     Returns:
-        List of matching tasks.
+        List of matching tasks with IDs prefixed by # for clarity.
     """
     session = get_session()
     tasks = search_tasks(session, query)
@@ -140,7 +172,8 @@ def search_tasks_tool(query: str) -> str:
 
     lines = []
     for task in tasks:
-        lines.append(f"[{task.id}] {task.title} - {task.status.value}")
+        parent_info = f" (subtask of #{task.parent_id})" if task.parent_id else ""
+        lines.append(f"#{task.id}: {task.title} [{task.status.value}]{parent_info}")
 
     return "\n".join(lines)
 
@@ -152,23 +185,28 @@ def get_task_details(task_id: int) -> str:
         task_id: The ID of the task.
 
     Returns:
-        Detailed task information including attachments.
+        Detailed task information including parent, subtasks, and attachments.
     """
     session = get_session()
     task = get_task(session, task_id)
 
     if not task:
         session.close()
-        return f"Task {task_id} not found."
+        return f"Task #{task_id} not found."
 
     attachments = list_attachments_by_task(session, task_id)
-    session.close()
+    subtasks = get_subtasks(session, task_id)
 
     lines = [
         f"Task #{task.id}: {task.title}",
         f"Status: {task.status.value}",
         f"Priority: {task.priority.value}",
     ]
+
+    if task.parent_id:
+        parent = get_task(session, task.parent_id)
+        if parent:
+            lines.append(f"Parent: #{parent.id} ({parent.title})")
 
     if task.description:
         lines.append(f"Description: {task.description}")
@@ -177,11 +215,17 @@ def get_task_details(task_id: int) -> str:
 
     lines.append(f"Created: {task.created_at.strftime('%Y-%m-%d %H:%M')}")
 
+    if subtasks:
+        lines.append(f"Subtasks ({len(subtasks)}):")
+        for sub in subtasks:
+            lines.append(f"  └─ #{sub.id}: {sub.title} [{sub.status.value}]")
+
     if attachments:
         lines.append(f"Attachments: {len(attachments)}")
         for att in attachments:
             lines.append(f"  - {att.file_type}: {att.description or 'No description'}")
 
+    session.close()
     return "\n".join(lines)
 
 
@@ -199,5 +243,96 @@ def delete_task_tool(task_id: int) -> str:
     session.close()
 
     if success:
-        return f"Deleted task {task_id}."
-    return f"Task {task_id} not found."
+        return f"Deleted task #{task_id}."
+    return f"Task #{task_id} not found."
+
+
+def add_subtask(
+    parent_id: int,
+    title: str,
+    description: Optional[str] = None,
+    priority: Optional[str] = None,
+    due_date: Optional[str] = None,
+) -> str:
+    """Add a subtask to an existing task.
+
+    Args:
+        parent_id: The ID of the parent task (must use the exact # ID from list_tasks).
+        title: Title of the subtask.
+        description: Optional description.
+        priority: Priority (low/medium/high/urgent). Defaults to medium.
+        due_date: Due date in ISO format.
+
+    Returns:
+        Confirmation message with the created subtask ID.
+    """
+    session = get_session()
+
+    # Verify parent exists
+    parent = get_task(session, parent_id)
+    if not parent:
+        session.close()
+        return f"Parent task #{parent_id} not found."
+
+    priority_enum = TaskPriority(priority.lower()) if priority else TaskPriority.MEDIUM
+    due_dt = datetime.fromisoformat(due_date) if due_date else None
+
+    task = create_task(
+        session,
+        title=title,
+        description=description,
+        priority=priority_enum,
+        due_date=due_dt,
+        parent_id=parent_id,
+    )
+    session.close()
+
+    return f"Created subtask #{task.id} under parent #{parent_id}: {title}"
+
+
+def move_task(task_id: int, new_parent_id: Optional[int] = None) -> str:
+    """Move a task to become a subtask of another task, or make it a root task.
+
+    Args:
+        task_id: The ID of the task to move.
+        new_parent_id: The ID of the new parent task, or None to make it a root task.
+
+    Returns:
+        Confirmation message or error.
+    """
+    session = get_session()
+
+    task = get_task(session, task_id)
+    if not task:
+        session.close()
+        return f"Task #{task_id} not found."
+
+    if new_parent_id is not None:
+        # Verify new parent exists
+        new_parent = get_task(session, new_parent_id)
+        if not new_parent:
+            session.close()
+            return f"New parent task #{new_parent_id} not found."
+
+        # Prevent circular references
+        if new_parent_id == task_id:
+            session.close()
+            return "A task cannot be its own parent."
+
+        # Check if new_parent is a descendant of task (would create cycle)
+        current = new_parent
+        while current.parent_id:
+            if current.parent_id == task_id:
+                session.close()
+                return f"Cannot move task #{task_id}: would create circular reference."
+            current = get_task(session, current.parent_id)
+            if not current:
+                break
+
+        update_task(session, task_id, parent_id=new_parent_id)
+        session.close()
+        return f"Moved task #{task_id} under parent #{new_parent_id}"
+    else:
+        update_task(session, task_id, clear_parent=True)
+        session.close()
+        return f"Made task #{task_id} a root task (no parent)"

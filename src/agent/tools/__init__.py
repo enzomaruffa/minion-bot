@@ -5,6 +5,8 @@ from .tasks import (
     search_tasks_tool,
     get_task_details,
     delete_task_tool,
+    add_subtask,
+    move_task,
 )
 from .reminders import (
     set_reminder,
@@ -20,6 +22,8 @@ __all__ = [
     "search_tasks_tool",
     "get_task_details",
     "delete_task_tool",
+    "add_subtask",
+    "move_task",
     "set_reminder",
     "list_reminders",
     "cancel_reminder",

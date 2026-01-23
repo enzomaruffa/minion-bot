@@ -33,11 +33,16 @@ class Task(Base):
     status: Mapped[TaskStatus] = mapped_column(default=TaskStatus.TODO)
     priority: Mapped[TaskPriority] = mapped_column(default=TaskPriority.MEDIUM)
     due_date: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tasks.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
+    parent: Mapped[Optional["Task"]] = relationship(
+        "Task", remote_side=[id], back_populates="subtasks"
+    )
+    subtasks: Mapped[list["Task"]] = relationship("Task", back_populates="parent")
     attachments: Mapped[list["Attachment"]] = relationship(back_populates="task")
     reminders: Mapped[list["Reminder"]] = relationship(back_populates="task")
 

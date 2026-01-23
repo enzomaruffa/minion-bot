@@ -22,12 +22,14 @@ def create_task(
     description: Optional[str] = None,
     priority: TaskPriority = TaskPriority.MEDIUM,
     due_date: Optional[datetime] = None,
+    parent_id: Optional[int] = None,
 ) -> Task:
     task = Task(
         title=title,
         description=description,
         priority=priority,
         due_date=due_date,
+        parent_id=parent_id,
     )
     session.add(task)
     session.commit()
@@ -47,6 +49,8 @@ def update_task(
     status: Optional[TaskStatus] = None,
     priority: Optional[TaskPriority] = None,
     due_date: Optional[datetime] = None,
+    parent_id: Optional[int] = None,
+    clear_parent: bool = False,
 ) -> Optional[Task]:
     task = session.get(Task, task_id)
     if not task:
@@ -62,6 +66,10 @@ def update_task(
         task.priority = priority
     if due_date is not None:
         task.due_date = due_date
+    if parent_id is not None:
+        task.parent_id = parent_id
+    if clear_parent:
+        task.parent_id = None
 
     session.commit()
     session.refresh(task)
@@ -78,12 +86,31 @@ def delete_task(session: Session, task_id: int) -> bool:
 
 
 def list_tasks_by_status(
-    session: Session, status: Optional[TaskStatus] = None
+    session: Session,
+    status: Optional[TaskStatus] = None,
+    root_only: bool = False,
 ) -> Sequence[Task]:
     stmt = select(Task).order_by(Task.created_at.desc())
     if status:
         stmt = stmt.where(Task.status == status)
+    if root_only:
+        stmt = stmt.where(Task.parent_id.is_(None))
     return session.scalars(stmt).all()
+
+
+def get_subtasks(session: Session, task_id: int) -> Sequence[Task]:
+    """Get all subtasks of a given task."""
+    stmt = select(Task).where(Task.parent_id == task_id).order_by(Task.created_at)
+    return session.scalars(stmt).all()
+
+
+def get_task_with_subtasks(session: Session, task_id: int) -> Optional[Task]:
+    """Get a task with its subtasks eagerly loaded."""
+    task = session.get(Task, task_id)
+    if task:
+        # Force load subtasks
+        _ = task.subtasks
+    return task
 
 
 def search_tasks(session: Session, query: str) -> Sequence[Task]:

@@ -15,6 +15,9 @@ from src.telegram.commands import (
     done_command,
     calendar_command,
     help_command,
+    auth_command,
+    handle_auth_code,
+    is_awaiting_auth_code,
 )
 
 from src.config import settings
@@ -42,6 +45,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     user_message = update.message.text
     logger.info(f"Received message: {user_message[:50]}...")
+
+    # Check if we're waiting for an auth code
+    if is_awaiting_auth_code():
+        response = await handle_auth_code(user_message)
+        await update.message.reply_text(response)
+        return
 
     try:
         response = await chat(user_message)
@@ -137,6 +146,7 @@ async def register_commands(application: Application) -> None:
         BotCommand("today", "Show today's agenda"),
         BotCommand("done", "Mark recent task as complete"),
         BotCommand("calendar", "Show upcoming events"),
+        BotCommand("auth", "Connect Google Calendar"),
         BotCommand("help", "Show help"),
     ]
     await application.bot.set_my_commands(commands)
@@ -152,6 +162,7 @@ def create_application() -> Application:
     application.add_handler(CommandHandler("today", today_command))
     application.add_handler(CommandHandler("done", done_command))
     application.add_handler(CommandHandler("calendar", calendar_command))
+    application.add_handler(CommandHandler("auth", auth_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("start", help_command))
 

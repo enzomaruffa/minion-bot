@@ -6,7 +6,11 @@ from src.config import settings
 from src.db import get_session
 from src.db.models import TaskStatus
 from src.db.queries import list_calendar_events_range, list_tasks_by_status, update_task
+from src.integrations.calendar import get_auth_url, complete_auth, is_calendar_connected
 from datetime import datetime, timedelta
+
+# Track if we're waiting for an auth code
+_awaiting_auth_code = False
 
 
 def is_authorized(user_id: int) -> bool:
@@ -109,19 +113,85 @@ async def calendar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await update.message.reply_text("\n".join(lines))
 
 
+async def auth_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /auth command - connect Google Calendar."""
+    global _awaiting_auth_code
+    
+    if not update.message:
+        return
+
+    user_id = update.effective_user.id if update.effective_user else None
+    if not user_id or not is_authorized(user_id):
+        await update.message.reply_text("Not authorized.")
+        return
+
+    # Check if already connected
+    if is_calendar_connected():
+        await update.message.reply_text("✓ Google Calendar is already connected!")
+        return
+
+    # Get auth URL
+    auth_url = get_auth_url()
+    if not auth_url:
+        await update.message.reply_text(
+            "❌ Cannot start auth: credentials.json not found.\n"
+            "Upload it to credentials/credentials.json first."
+        )
+        return
+
+    _awaiting_auth_code = True
+    await update.message.reply_text(
+        "🔗 *Google Calendar Authorization*\n\n"
+        f"1. [Click here to authorize]({auth_url})\n"
+        "2. Sign in with your Google account\n"
+        "3. Copy the authorization code\n"
+        "4. Send it back to me here\n\n"
+        "_Waiting for your code..._",
+        parse_mode="Markdown",
+        disable_web_page_preview=True,
+    )
+
+
+async def handle_auth_code(code: str) -> str:
+    """Process an authorization code. Returns response message."""
+    global _awaiting_auth_code
+    
+    if complete_auth(code.strip()):
+        _awaiting_auth_code = False
+        return "✓ Google Calendar connected successfully!"
+    else:
+        return "❌ Invalid code. Try /auth again."
+
+
+def is_awaiting_auth_code() -> bool:
+    """Check if we're waiting for an auth code."""
+    return _awaiting_auth_code
+
+
+def cancel_auth() -> None:
+    """Cancel pending auth."""
+    global _awaiting_auth_code
+    _awaiting_auth_code = False
+
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /help command - show available commands."""
     if not update.message:
         return
 
-    help_text = """Available commands:
+    calendar_status = "✓ connected" if is_calendar_connected() else "✗ not connected (/auth)"
+
+    help_text = f"""*Available commands:*
 
 /tasks - List pending tasks
 /today - Show today's agenda
 /done - Mark recent task as complete
 /calendar - Show upcoming events
+/auth - Connect Google Calendar
 /help - Show this help
+
+*Google Calendar:* {calendar_status}
 
 Or just send a message and I'll help you manage your tasks and reminders!
 """
-    await update.message.reply_text(help_text)
+    await update.message.reply_text(help_text, parse_mode="Markdown")

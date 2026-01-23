@@ -15,6 +15,78 @@ logger = logging.getLogger(__name__)
 
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 
+# Store pending auth flow for bot-based authentication
+_pending_flow: Optional[InstalledAppFlow] = None
+
+
+def get_auth_url() -> Optional[str]:
+    """Generate OAuth URL for bot-based authentication.
+    
+    Returns:
+        Authorization URL to send to user, or None if credentials file missing.
+    """
+    global _pending_flow
+    
+    if not settings.google_credentials_path.exists():
+        logger.warning("Google credentials file not found at %s", settings.google_credentials_path)
+        return None
+    
+    _pending_flow = InstalledAppFlow.from_client_secrets_file(
+        str(settings.google_credentials_path), 
+        SCOPES,
+        redirect_uri="urn:ietf:wg:oauth:2.0:oob"  # Manual copy/paste flow
+    )
+    
+    auth_url, _ = _pending_flow.authorization_url(prompt="consent")
+    return auth_url
+
+
+def complete_auth(code: str) -> bool:
+    """Complete OAuth flow with authorization code from user.
+    
+    Args:
+        code: The authorization code from Google.
+        
+    Returns:
+        True if successful, False otherwise.
+    """
+    global _pending_flow
+    
+    if not _pending_flow:
+        logger.error("No pending auth flow. Call get_auth_url first.")
+        return False
+    
+    try:
+        _pending_flow.fetch_token(code=code)
+        creds = _pending_flow.credentials
+        
+        # Save credentials
+        settings.google_token_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(settings.google_token_path, "w") as token:
+            token.write(creds.to_json())
+        
+        logger.info("Google Calendar authorization successful")
+        _pending_flow = None
+        return True
+    except Exception as e:
+        logger.exception(f"Failed to complete auth: {e}")
+        _pending_flow = None
+        return False
+
+
+def is_calendar_connected() -> bool:
+    """Check if calendar is connected and credentials are valid."""
+    if not settings.google_token_path.exists():
+        return False
+    
+    try:
+        creds = Credentials.from_authorized_user_file(
+            str(settings.google_token_path), SCOPES
+        )
+        return creds and creds.valid
+    except Exception:
+        return False
+
 
 def get_credentials(headless: bool = False) -> Optional[Credentials]:
     """Get or refresh Google Calendar credentials.

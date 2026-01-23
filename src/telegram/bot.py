@@ -100,7 +100,12 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         # Send transcript and process with agent
         await safe_reply(update.message, f"_Heard: {transcript}_")
 
-        response = await chat(transcript)
+        # Add transcription context for the agent
+        agent_message = (
+            f"[This message was transcribed from audio - may contain spelling errors. "
+            f"Confirm names/details if needed before taking action.]\n\n{transcript}"
+        )
+        response = await chat(agent_message)
         await safe_reply(update.message, response)
     except Exception as e:
         logger.exception("Error processing voice message")

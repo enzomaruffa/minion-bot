@@ -3,9 +3,18 @@ import logging
 from telegram import Update
 from telegram.ext import (
     Application,
+    CommandHandler,
     ContextTypes,
     MessageHandler,
     filters,
+)
+
+from src.telegram.commands import (
+    tasks_command,
+    today_command,
+    done_command,
+    calendar_command,
+    help_command,
 )
 
 from src.config import settings
@@ -45,6 +54,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 def create_application() -> Application:
     """Create and configure the Telegram application."""
     application = Application.builder().token(settings.telegram_bot_token).build()
+
+    # Add command handlers
+    application.add_handler(CommandHandler("tasks", tasks_command))
+    application.add_handler(CommandHandler("today", today_command))
+    application.add_handler(CommandHandler("done", done_command))
+    application.add_handler(CommandHandler("calendar", calendar_command))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("start", help_command))
 
     # Add message handler for text messages
     application.add_handler(

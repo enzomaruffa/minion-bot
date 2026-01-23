@@ -154,10 +154,17 @@ class ShoppingItem(Base):
     contact_id: Mapped[Optional[int]] = mapped_column(ForeignKey("contacts.id"), nullable=True)
     priority: Mapped[ItemPriority] = mapped_column(default=ItemPriority.MEDIUM)
     checked: Mapped[bool] = mapped_column(default=False)
+    quantity_target: Mapped[int] = mapped_column(default=1)
+    quantity_purchased: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
     shopping_list: Mapped["ShoppingList"] = relationship(back_populates="items")
     contact: Mapped[Optional["Contact"]] = relationship()
+
+    @property
+    def is_complete(self) -> bool:
+        """Check if item is complete (purchased >= target or manually checked)."""
+        return self.checked or self.quantity_purchased >= self.quantity_target
 
 
 def init_db(database_url: str) -> None:

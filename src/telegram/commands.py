@@ -17,6 +17,9 @@ from datetime import datetime, timedelta
 # Track if we're waiting for an auth code
 _awaiting_auth_code = False
 
+# Track last command output for agent context injection
+_last_command_context: dict | None = None
+
 
 def is_authorized(user_id: int) -> bool:
     """Check if the user is authorized."""
@@ -50,7 +53,9 @@ async def tasks_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if len(parts) == 2:  # Only header
         parts.append("<i>No pending tasks!</i> 🎉")
 
-    await update.message.reply_text("\n".join(parts), parse_mode="HTML")
+    output = "\n".join(parts)
+    _store_command_context("/tasks", output)
+    await update.message.reply_text(output, parse_mode="HTML")
 
 
 async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -66,8 +71,9 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     today_str = datetime.now().strftime("%A, %b %d")
     result = get_agenda()
 
-    formatted = f"📅 <b>{today_str}</b>\n\n{result}"
-    await update.message.reply_text(formatted, parse_mode="HTML")
+    output = f"📅 <b>{today_str}</b>\n\n{result}"
+    _store_command_context("/today", output)
+    await update.message.reply_text(output, parse_mode="HTML")
 
 
 async def calendar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -174,6 +180,35 @@ def cancel_auth() -> None:
     _awaiting_auth_code = False
 
 
+def get_last_command_context() -> dict | None:
+    """Get the last command context if recent (< 5 min)."""
+    global _last_command_context
+    if not _last_command_context:
+        return None
+    # Check if it's still recent
+    elapsed = (datetime.now() - _last_command_context["time"]).total_seconds()
+    if elapsed > 300:  # 5 minutes
+        _last_command_context = None
+        return None
+    return _last_command_context
+
+
+def clear_command_context() -> None:
+    """Clear the stored command context."""
+    global _last_command_context
+    _last_command_context = None
+
+
+def _store_command_context(command: str, output: str) -> None:
+    """Store command output for agent context injection."""
+    global _last_command_context
+    _last_command_context = {
+        "command": command,
+        "output": output,
+        "time": datetime.now(),
+    }
+
+
 async def contacts_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /contacts command - list all contacts."""
     if not update.message:
@@ -251,8 +286,8 @@ def _format_shopping_list(items, list_type: ShoppingListType, emoji: str, title:
     if not filtered:
         return f"{emoji} <b>{title}</b>\n<i>Empty</i>"
 
-    unchecked = [i for i in filtered if not i.checked]
-    checked = [i for i in filtered if i.checked]
+    unchecked = [i for i in filtered if not i.is_complete]
+    checked = [i for i in filtered if i.is_complete]
 
     lines = [f"{emoji} <b>{title}</b>", ""]
 
@@ -263,13 +298,16 @@ def _format_shopping_list(items, list_type: ShoppingListType, emoji: str, title:
         elif item.recipient:
             recipient = f" → {item.recipient}"
         notes = f" <i>({item.notes})</i>" if item.notes else ""
-        lines.append(f"⬜ {item.name}{recipient}{notes}")
+        # Show quantity progress if target > 1
+        qty_info = f" ({item.quantity_purchased}/{item.quantity_target})" if item.quantity_target > 1 else ""
+        lines.append(f"⬜ {item.name}{qty_info}{recipient}{notes}")
 
     if checked:
         lines.append("")
         lines.append(f"<i>Checked ({len(checked)}):</i>")
         for item in checked[:3]:  # Show max 3 checked
-            lines.append(f"  ☑️ <s>{item.name}</s>")
+            qty_info = f" ({item.quantity_purchased}/{item.quantity_target})" if item.quantity_target > 1 else ""
+            lines.append(f"  ☑️ <s>{item.name}</s>{qty_info}")
         if len(checked) > 3:
             lines.append(f"  <i>...and {len(checked) - 3} more</i>")
 
@@ -288,10 +326,11 @@ async def groceries_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     session = get_session()
     items = list_shopping_items(session, ShoppingListType.GROCERIES, include_checked=True)
-    result = _format_shopping_list(items, ShoppingListType.GROCERIES, "🛒", "Groceries")
+    output = _format_shopping_list(items, ShoppingListType.GROCERIES, "🛒", "Groceries")
     session.close()
 
-    await update.message.reply_text(result, parse_mode="HTML")
+    _store_command_context("/groceries", output)
+    await update.message.reply_text(output, parse_mode="HTML")
 
 
 async def gifts_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -306,10 +345,11 @@ async def gifts_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     session = get_session()
     items = list_shopping_items(session, ShoppingListType.GIFTS, include_checked=True)
-    result = _format_shopping_list(items, ShoppingListType.GIFTS, "🎁", "Gift Ideas")
+    output = _format_shopping_list(items, ShoppingListType.GIFTS, "🎁", "Gift Ideas")
     session.close()
 
-    await update.message.reply_text(result, parse_mode="HTML")
+    _store_command_context("/gifts", output)
+    await update.message.reply_text(output, parse_mode="HTML")
 
 
 async def wishlist_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -324,10 +364,11 @@ async def wishlist_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     session = get_session()
     items = list_shopping_items(session, ShoppingListType.WISHLIST, include_checked=True)
-    result = _format_shopping_list(items, ShoppingListType.WISHLIST, "✨", "Wishlist")
+    output = _format_shopping_list(items, ShoppingListType.WISHLIST, "✨", "Wishlist")
     session.close()
 
-    await update.message.reply_text(result, parse_mode="HTML")
+    _store_command_context("/wishlist", output)
+    await update.message.reply_text(output, parse_mode="HTML")
 
 
 async def lists_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -353,7 +394,9 @@ async def lists_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     
     session.close()
 
-    await update.message.reply_text("\n\n".join(parts), parse_mode="HTML")
+    output = "\n\n".join(parts)
+    _store_command_context("/lists", output)
+    await update.message.reply_text(output, parse_mode="HTML")
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

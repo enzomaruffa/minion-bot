@@ -1,5 +1,7 @@
+import asyncio
 import logging
 import time
+import uuid
 from typing import Any, Callable, Dict
 
 from agno.agent import Agent
@@ -15,7 +17,7 @@ logger = logging.getLogger(__name__)
 def tool_logger_hook(
     function_name: str, function_call: Callable, arguments: Dict[str, Any]
 ) -> Any:
-    """Log tool calls with execution time."""
+    """Log tool calls with execution time and send error notifications."""
     logger.info(f"Tool call: {function_name}({arguments})")
     start_time = time.time()
     
@@ -26,7 +28,20 @@ def tool_logger_hook(
         return result
     except Exception as e:
         duration = time.time() - start_time
-        logger.exception(f"Tool {function_name} failed after {duration:.2f}s: {e}")
+        error_id = str(uuid.uuid4())[:8]
+        logger.exception(f"Tool {function_name} failed after {duration:.2f}s: {e} (ID: {error_id})")
+        
+        # Send async error notification
+        try:
+            from src.telegram.bot import notify_error
+            loop = asyncio.get_running_loop()
+            loop.create_task(notify_error(function_name, e, error_id))
+        except RuntimeError:
+            # No event loop running
+            pass
+        except Exception as notify_err:
+            logger.debug(f"Could not send error notification: {notify_err}")
+        
         raise
 from src.agent.tools import (
     add_tasks,
@@ -55,6 +70,7 @@ from src.agent.tools import (
     remove_item,
     clear_checked,
     show_gifts_for_contact,
+    purchase_item,
     # Contact tools
     add_contact,
     show_contacts,
@@ -120,6 +136,13 @@ Example mappings:
 - "call Jana about party" → Social
 - "read React docs" → Learning
 
+TASK DESCRIPTIONS:
+Tasks can have optional descriptions for extra context. Descriptions:
+- Are hidden in list views to keep them clean
+- Are shown when using get_task_details
+- Are searchable with search_tasks_tool
+Use descriptions for notes, links, or details that don't fit in the title.
+
 SHOPPING LISTS:
 Three types - auto-infer, never ask:
 - Gifts 🎁: "gift for mom" → Gifts (anything with a recipient or gift-related keywords)
@@ -127,6 +150,9 @@ Three types - auto-infer, never ask:
 - Wishlist ✨: "that PS5 I want" → Wishlist (personal wants, "wish", "want", "someday")
 Just add items. Don't ask "which list?" - infer it.
 Gift items with recipients auto-link to contacts if they exist. Use show_gifts_for_contact to see all gift ideas for someone.
+
+Quantities: Add "12 eggs" and it creates with target=12. Use purchase_item to track partial purchases
+(e.g., "bought 3 eggs" → purchase_item(id, 3)). Items auto-complete when purchased >= target.
 
 CONTACTS:
 Track birthdays with add_contact. You'll be reminded of upcoming birthdays at 5pm daily.
@@ -241,6 +267,7 @@ def create_agent() -> Agent:
             remove_item,
             clear_checked,
             show_gifts_for_contact,
+            purchase_item,
             # Contact tools
             add_contact,
             show_contacts,

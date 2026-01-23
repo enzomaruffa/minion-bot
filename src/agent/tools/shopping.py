@@ -1,3 +1,4 @@
+import re
 from typing import Optional
 
 from src.db import get_session
@@ -11,6 +12,7 @@ from src.db.queries import (
     get_gifts_by_contact,
     get_shopping_item,
     list_shopping_items,
+    purchase_shopping_item,
 )
 
 
@@ -55,6 +57,17 @@ def _get_list_emoji(list_type: ShoppingListType) -> str:
     return emojis.get(list_type, "📝")
 
 
+def _parse_quantity(item: str) -> tuple[str, int]:
+    """Parse quantity from item name (e.g., '12 eggs' → ('eggs', 12))."""
+    # Match patterns like "12 eggs", "6 bananas", "1 item"
+    match = re.match(r"^(\d+)\s+(.+)$", item.strip())
+    if match:
+        quantity = int(match.group(1))
+        name = match.group(2)
+        return (name, max(1, quantity))
+    return (item, 1)
+
+
 def add_to_list(
     item: str,
     list_type: Optional[str] = None,
@@ -65,7 +78,8 @@ def add_to_list(
     """Add an item to a shopping list.
 
     Args:
-        item: The item to add (e.g., "milk", "gift for Jana: a book").
+        item: The item to add (e.g., "milk", "12 eggs", "gift for Jana: a book").
+              Prefix with quantity for tracking (e.g., "12 eggs").
         list_type: Optional list type (gifts/groceries/wishlist). Auto-inferred if not provided.
         notes: Optional notes about the item.
         recipient: Optional recipient name (for gifts). Auto-links to contact if found.
@@ -76,6 +90,9 @@ def add_to_list(
     """
     session = get_session()
 
+    # Parse quantity from item name
+    item_name, quantity = _parse_quantity(item)
+
     # Determine list type
     if list_type:
         try:
@@ -84,7 +101,7 @@ def add_to_list(
             session.close()
             return f"Invalid list type '{list_type}'. Use: gifts, groceries, or wishlist."
     else:
-        lt = _infer_list_type(item, recipient)
+        lt = _infer_list_type(item_name, recipient)
 
     # Parse priority
     prio = ItemPriority.MEDIUM
@@ -106,17 +123,19 @@ def add_to_list(
     shopping_item = create_shopping_item(
         session,
         list_type=lt,
-        name=item,
+        name=item_name,
         notes=notes,
         recipient=recipient if not contact_id else None,  # Only store text if no contact link
         contact_id=contact_id,
         priority=prio,
+        quantity_target=quantity,
     )
     session.close()
 
     emoji = _get_list_emoji(lt)
     recipient_info = f" (for {recipient_display})" if recipient_display else ""
-    return f"Added to {emoji} {lt.value.title()}: #{shopping_item.id} {item}{recipient_info}"
+    quantity_info = f" (0/{quantity})" if quantity > 1 else ""
+    return f"Added to {emoji} {lt.value.title()}: #{shopping_item.id} {item_name}{quantity_info}{recipient_info}"
 
 
 def show_list(list_type: Optional[str] = None, include_checked: bool = False) -> str:
@@ -164,7 +183,7 @@ def show_list(list_type: Optional[str] = None, include_checked: bool = False) ->
         lines.append(f"\n{emoji} <b>{item_type.value.title()}</b>")
 
         for item in grouped[item_type]:
-            checkbox = "☑️" if item.checked else "⬜"
+            checkbox = "☑️" if item.is_complete else "⬜"
             # Show contact name if linked, otherwise fallback to recipient text
             if item.contact:
                 recipient_info = f" (for {item.contact.name})"
@@ -173,7 +192,9 @@ def show_list(list_type: Optional[str] = None, include_checked: bool = False) ->
             else:
                 recipient_info = ""
             notes_info = f" - {item.notes}" if item.notes else ""
-            lines.append(f"  {checkbox} <code>#{item.id}</code>: {item.name}{recipient_info}{notes_info}")
+            # Show quantity progress if target > 1
+            qty_info = f" ({item.quantity_purchased}/{item.quantity_target})" if item.quantity_target > 1 else ""
+            lines.append(f"  {checkbox} <code>#{item.id}</code>: {item.name}{qty_info}{recipient_info}{notes_info}")
 
     return "\n".join(lines).strip()
 
@@ -200,6 +221,33 @@ def check_item(item_id: int) -> str:
     if success:
         return f"☑️ Checked off: #{item_id} {name}"
     return f"Failed to check item #{item_id}."
+
+
+def purchase_item(item_id: int, quantity: int = 1) -> str:
+    """Record purchasing some quantity of an item.
+
+    Args:
+        item_id: The ID of the item.
+        quantity: How many purchased. Defaults to 1.
+
+    Returns:
+        Confirmation with updated quantity progress.
+    """
+    session = get_session()
+    item = get_shopping_item(session, item_id)
+    if not item:
+        session.close()
+        return f"Item #{item_id} not found."
+
+    name = item.name
+    success, purchased, target = purchase_shopping_item(session, item_id, quantity)
+    session.close()
+
+    if success:
+        if purchased >= target:
+            return f"☑️ {name} complete! ({purchased}/{target})"
+        return f"📦 Bought {quantity} {name} ({purchased}/{target})"
+    return f"Failed to update item #{item_id}."
 
 
 def uncheck_item(item_id: int) -> str:
@@ -310,8 +358,9 @@ def show_gifts_for_contact(contact_name: str, include_checked: bool = False) -> 
 
     lines = [f"<b>🎁 Gift ideas for {contact.name}</b>"]
     for item in gifts:
-        checkbox = "☑️" if item.checked else "⬜"
+        checkbox = "☑️" if item.is_complete else "⬜"
         notes_info = f" - {item.notes}" if item.notes else ""
-        lines.append(f"  {checkbox} <code>#{item.id}</code>: {item.name}{notes_info}")
+        qty_info = f" ({item.quantity_purchased}/{item.quantity_target})" if item.quantity_target > 1 else ""
+        lines.append(f"  {checkbox} <code>#{item.id}</code>: {item.name}{qty_info}{notes_info}")
 
     return "\n".join(lines)

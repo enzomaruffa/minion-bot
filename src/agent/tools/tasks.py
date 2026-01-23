@@ -50,7 +50,7 @@ def add_tasks(tasks: list[dict]) -> str:
             due_date = parse_date(due_str)
 
         parent_id = task_data.get("parent_id")
-        
+
         # Resolve project by name
         project_id = None
         if project_name := task_data.get("project"):
@@ -78,7 +78,7 @@ def add_tasks(tasks: list[dict]) -> str:
         created_ids.append(task.id)
 
     session.close()
-    
+
     if len(created_ids) == 1:
         return f"✓ Created task <code>#{created_ids[0]}</code>"
     return f"✓ Created {len(created_ids)} tasks: {', '.join(f'<code>#{id}</code>' for id in created_ids)}"
@@ -114,7 +114,7 @@ def update_task_tool(
     status_enum = TaskStatus(status.lower()) if status else None
     priority_enum = TaskPriority(priority.lower()) if priority else None
     due_dt = parse_date(due_date) if due_date else None
-    
+
     # Resolve project by name
     project_id = None
     if project:
@@ -152,9 +152,10 @@ def _format_task_line(task: Task, indent: int = 0) -> str:
     """Format a single task line with optional indentation."""
     prefix = "  └ " if indent > 0 else "• "
     project_emoji = task.project.emoji + " " if task.project else ""
+    contact_info = f" → <u>{task.contact.name}</u>" if task.contact else ""
     due = f" <i>{task.due_date.strftime('%b %d')}</i>" if task.due_date else ""
     status_icon = {"todo": "⬜", "in_progress": "🔄", "done": "✅", "cancelled": "❌"}.get(task.status.value, "")
-    return f"{prefix}<code>#{task.id}</code> {project_emoji}{task.title}{due} {status_icon}"
+    return f"{prefix}<code>#{task.id}</code> {project_emoji}{task.title}{contact_info}{due} {status_icon}"
 
 
 def _format_task_with_subtasks(task: Task, session, indent: int = 0) -> list[str]:
@@ -184,7 +185,7 @@ def list_tasks(
     session = get_session()
 
     status_enum = TaskStatus(status.lower()) if status else None
-    
+
     # Resolve project filter
     project_id = None
     if project:
@@ -226,17 +227,19 @@ def search_tasks_tool(query: str) -> str:
     """
     session = get_session()
     tasks = search_tasks(session, query)
-    session.close()
 
     if not tasks:
+        session.close()
         return f"No tasks found matching '{query}'."
 
     lines = []
     for task in tasks:
         project_emoji = task.project.emoji + " " if task.project else ""
+        contact_info = f" → <u>{task.contact.name}</u>" if task.contact else ""
         parent_info = f" (subtask of #{task.parent_id})" if task.parent_id else ""
-        lines.append(f"#{task.id}: {project_emoji}{task.title} [{task.status.value}]{parent_info}")
+        lines.append(f"#{task.id}: {project_emoji}{task.title}{contact_info} [{task.status.value}]{parent_info}")
 
+    session.close()
     return "\n".join(lines)
 
 
@@ -269,7 +272,7 @@ def get_task_details(task_id: int) -> str:
         lines.append(f"Project: {task.project.emoji} {task.project.name}")
 
     if task.contact:
-        contact_info = f"Contact: {task.contact.name}"
+        contact_info = f"Contact: <u>{task.contact.name}</u>"
         if task.contact.birthday:
             contact_info += f" (🎂 {task.contact.birthday.strftime('%B %d')})"
         lines.append(contact_info)
@@ -349,7 +352,7 @@ def add_subtask(
 
     priority_enum = TaskPriority(priority.lower()) if priority else TaskPriority.MEDIUM
     due_dt = parse_date(due_date) if due_date else None
-    
+
     # Resolve project - inherit from parent if not specified
     project_id = parent.project_id  # inherit by default
     if project:

@@ -208,16 +208,19 @@ def get_contact_tasks(contact_id: int) -> str:
         session.close()
         return f"Contact #{contact_id} not found."
 
+    contact_name = contact.name
     tasks = get_tasks_by_contact(session, contact_id)
-    session.close()
 
     if not tasks:
-        return f"No tasks linked to {contact.name}."
+        session.close()
+        return f"No tasks linked to {contact_name}."
 
-    lines = [f"<b>Tasks for {contact.name}</b>"]
+    lines = [f"<b>Tasks for {contact_name}</b>"]
     for task in tasks:
         project_emoji = task.project.emoji + " " if task.project else ""
-        due = f" <i>(due: {task.due_date.strftime('%Y-%m-%d')})</i>" if task.due_date else ""
-        lines.append(f"  • <code>#{task.id}</code>: {project_emoji}{task.title} [{task.status.value}]{due}")
+        due = f" <i>{task.due_date.strftime('%b %d')}</i>" if task.due_date else ""
+        status_icon = {"todo": "⬜", "in_progress": "🔄", "done": "✅", "cancelled": "❌"}.get(task.status.value, "")
+        lines.append(f"  • <code>#{task.id}</code> {project_emoji}{task.title}{due} {status_icon}")
 
+    session.close()
     return "\n".join(lines)

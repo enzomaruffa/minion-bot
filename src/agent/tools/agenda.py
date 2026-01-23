@@ -82,7 +82,8 @@ def get_agenda(date: Optional[str] = None) -> str:
         lines.append("<b>📋 Due Today</b>")
         for task in tasks_due:
             project_emoji = task.project.emoji + " " if task.project else ""
-            lines.append(f"• <code>#{task.id}</code> {project_emoji}{task.title}")
+            contact_info = f" → <u>{task.contact.name}</u>" if task.contact else ""
+            lines.append(f"• <code>#{task.id}</code> {project_emoji}{task.title}{contact_info}")
     else:
         lines.append("<i>No tasks due today</i>")
 

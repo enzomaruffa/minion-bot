@@ -404,6 +404,7 @@ def create_shopping_item(
     recipient: Optional[str] = None,
     contact_id: Optional[int] = None,
     priority: ItemPriority = ItemPriority.MEDIUM,
+    quantity_target: int = 1,
 ) -> ShoppingItem:
     """Create a new shopping item."""
     shopping_list = get_shopping_list_by_type(session, list_type)
@@ -420,6 +421,8 @@ def create_shopping_item(
         recipient=recipient,
         contact_id=contact_id,
         priority=priority,
+        quantity_target=quantity_target,
+        quantity_purchased=0,
     )
     session.add(item)
     session.commit()
@@ -458,6 +461,31 @@ def check_shopping_item(session: Session, item_id: int, checked: bool = True) ->
     item.checked = checked
     session.commit()
     return True
+
+
+def purchase_shopping_item(
+    session: Session, item_id: int, quantity: int = 1
+) -> tuple[bool, int, int]:
+    """Add to quantity purchased for a shopping item.
+    
+    Returns (success, new_purchased, target) tuple.
+    Auto-checks item if purchased >= target.
+    """
+    item = session.get(ShoppingItem, item_id)
+    if not item:
+        return (False, 0, 0)
+    
+    item.quantity_purchased = min(
+        item.quantity_purchased + quantity,
+        item.quantity_target
+    )
+    
+    # Auto-check if fully purchased
+    if item.quantity_purchased >= item.quantity_target:
+        item.checked = True
+    
+    session.commit()
+    return (True, item.quantity_purchased, item.quantity_target)
 
 
 def delete_shopping_item(session: Session, item_id: int) -> bool:

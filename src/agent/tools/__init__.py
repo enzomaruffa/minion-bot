@@ -30,6 +30,7 @@ from .shopping import (
     remove_item,
     clear_checked,
     show_gifts_for_contact,
+    purchase_item,
 )
 from .contacts import (
     add_contact,
@@ -67,6 +68,7 @@ __all__ = [
     "remove_item",
     "clear_checked",
     "show_gifts_for_contact",
+    "purchase_item",
     # Contact tools
     "add_contact",
     "show_contacts",

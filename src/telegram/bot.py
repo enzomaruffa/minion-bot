@@ -1,4 +1,6 @@
 import logging
+import uuid
+from datetime import datetime
 
 from telegram import Update
 from telegram.error import BadRequest
@@ -24,6 +26,8 @@ from src.telegram.commands import (
     gifts_command,
     wishlist_command,
     lists_command,
+    get_last_command_context,
+    clear_command_context,
 )
 
 from src.config import settings
@@ -69,6 +73,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         response = await handle_auth_code(user_message)
         await update.message.reply_text(response)
         return
+
+    # Inject last command context if recent
+    cmd_context = get_last_command_context()
+    if cmd_context:
+        user_message = f"[User just ran {cmd_context['command']} and saw:\n{cmd_context['output']}]\n\n{user_message}"
+        clear_command_context()
 
     try:
         response = await chat(user_message)
@@ -234,3 +244,43 @@ async def send_message(text: str) -> None:
             )
         else:
             raise
+
+
+# Error notification rate limiting
+_last_error_notification: dict[str, datetime] = {}
+_ERROR_RATE_LIMIT_SECONDS = 60
+
+
+async def notify_error(tool_name: str, error: Exception, error_id: str | None = None) -> None:
+    """Send an error notification to the user.
+    
+    Rate limited to 1 per minute per tool to avoid spam.
+    """
+    global _last_error_notification
+    
+    # Rate limit by tool name
+    now = datetime.now()
+    if tool_name in _last_error_notification:
+        elapsed = (now - _last_error_notification[tool_name]).total_seconds()
+        if elapsed < _ERROR_RATE_LIMIT_SECONDS:
+            logger.debug(f"Skipping error notification for {tool_name}, rate limited")
+            return
+    
+    _last_error_notification[tool_name] = now
+    
+    if not error_id:
+        error_id = str(uuid.uuid4())[:8]
+    
+    # Brief error message without sensitive details
+    error_msg = str(error)[:100]
+    
+    text = (
+        f"⚠️ Error in <code>{tool_name}</code>\n"
+        f"{error_msg}\n"
+        f"ID: <code>{error_id}</code>"
+    )
+    
+    try:
+        await send_message(text)
+    except Exception as e:
+        logger.error(f"Failed to send error notification: {e}")

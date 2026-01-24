@@ -117,7 +117,7 @@ def upcoming_birthdays(days: int = 14) -> str:
             else:
                 when = f"in {days_until} days"
 
-            lines.append(f"  • <b>{contact.name}</b> — {this_year_bday.strftime('%B %d')} ({when})")
+            lines.append(f"  • <code>#{contact.id}</code> <b>{contact.name}</b> — {this_year_bday.strftime('%B %d')} ({when})")
 
     return "\n".join(lines)
 

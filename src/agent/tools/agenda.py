@@ -93,7 +93,7 @@ def get_agenda(date: Optional[str] = None) -> str:
         lines.append("<b>⏰ Reminders</b>")
         for rem in today_reminders:
             time_str = rem.remind_at.strftime("%H:%M")
-            lines.append(f"• {time_str}  {rem.message}")
+            lines.append(f"• {time_str} <code>#{rem.id}</code> {rem.message}")
 
     # Pending tasks (backlog)
     if pending_tasks:

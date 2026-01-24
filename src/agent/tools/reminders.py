@@ -66,10 +66,10 @@ def list_reminders(include_delivered: bool = False) -> str:
 
 
 def cancel_reminder(reminder_id: int) -> str:
-    """Cancel a pending reminder.
+    """Cancel a pending reminder. DESTRUCTIVE - call list_reminders first to verify the ID!
 
     Args:
-        reminder_id: The ID of the reminder to cancel.
+        reminder_id: The ID of the reminder. MUST call list_reminders first to verify correct ID.
 
     Returns:
         Confirmation message or error if not found.

@@ -83,7 +83,7 @@ def list_projects_tool(include_archived: bool = False) -> str:
 
         tag_info = f" <i>[{p.tag.name}]</i>" if p.tag else ""
         archived = " <s>(archived)</s>" if p.archived else ""
-        lines.append(f"{p.emoji} <b>{p.name}</b>{tag_info}{archived}")
+        lines.append(f"<code>#{p.id}</code> {p.emoji} <b>{p.name}</b>{tag_info}{archived}")
         lines.append(f"   {pending} pending, {done} done")
 
     session.close()

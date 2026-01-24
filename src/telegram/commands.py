@@ -303,14 +303,14 @@ def _format_shopping_list(items, list_type: ShoppingListType, emoji: str, title:
             notes = f" <i>({item.notes})</i>"
         # Show quantity progress if target > 1
         qty_info = f" ({item.quantity_purchased}/{item.quantity_target})" if item.quantity_target > 1 else ""
-        lines.append(f"⬜ {item.name}{qty_info}{recipient}{notes}")
+        lines.append(f"⬜ <code>#{item.id}</code> {item.name}{qty_info}{recipient}{notes}")
 
     if checked:
         lines.append("")
         lines.append(f"<i>Checked ({len(checked)}):</i>")
         for item in checked[:3]:  # Show max 3 checked
             qty_info = f" ({item.quantity_purchased}/{item.quantity_target})" if item.quantity_target > 1 else ""
-            lines.append(f"  ☑️ <s>{item.name}</s>{qty_info}")
+            lines.append(f"  ☑️ <code>#{item.id}</code> <s>{item.name}</s>{qty_info}")
         if len(checked) > 3:
             lines.append(f"  <i>...and {len(checked) - 3} more</i>")
 

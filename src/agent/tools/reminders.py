@@ -1,7 +1,6 @@
-from datetime import datetime
 from typing import Optional
 
-from src.db import get_session
+from src.db import session_scope
 from src.db.queries import (
     create_reminder,
     delete_reminder,
@@ -26,17 +25,15 @@ def set_reminder(
     Returns:
         Confirmation message with reminder ID.
     """
-    session = get_session()
-
     remind_dt = parse_date(remind_at)
     if not remind_dt:
-        session.close()
-        return f"Could not parse date: <code>{remind_at}</code>"
-    reminder = create_reminder(session, message, remind_dt, task_id)
-    session.close()
+        return f"Could not parse date: {remind_at}"
 
-    task_info = f" <i>(linked to task <code>#{task_id}</code>)</i>" if task_id else ""
-    return f"⏰ Reminder <code>#{reminder.id}</code> set for <b>{remind_dt.strftime('%b %d, %H:%M')}</b>{task_info}\n<i>{message}</i>"
+    with session_scope() as session:
+        reminder = create_reminder(session, message, remind_dt, task_id)
+
+        task_info = f" (linked to task #{task_id})" if task_id else ""
+        return f"Reminder #{reminder.id} set for {remind_dt.strftime('%b %d, %H:%M')}{task_info}\n{message}"
 
 
 def list_reminders(include_delivered: bool = False) -> str:
@@ -48,21 +45,22 @@ def list_reminders(include_delivered: bool = False) -> str:
     Returns:
         Formatted list of reminders.
     """
-    session = get_session()
-    reminders = list_all_reminders(session, include_delivered)
-    session.close()
+    with session_scope() as session:
+        reminders = list_all_reminders(session, include_delivered)
 
-    if not reminders:
-        return "<i>No pending reminders</i>" if not include_delivered else "<i>No reminders found</i>"
+        if not reminders:
+            if not include_delivered:
+                return "No pending reminders. Try 'remind me to...' to set one!"
+            return "No reminders found."
 
-    lines = ["<b>⏰ Reminders</b>", ""]
-    for rem in reminders:
-        task_info = f" → task <code>#{rem.task_id}</code>" if rem.task_id else ""
-        status = " ✓" if rem.delivered else ""
-        time_str = rem.remind_at.strftime("%b %d, %H:%M")
-        lines.append(f"• <code>#{rem.id}</code> {time_str}{status}\n  <i>{rem.message}</i>{task_info}")
+        lines = ["Reminders", ""]
+        for rem in reminders:
+            task_info = f" -> task #{rem.task_id}" if rem.task_id else ""
+            status = " [delivered]" if rem.delivered else ""
+            time_str = rem.remind_at.strftime("%b %d, %H:%M")
+            lines.append(f"  #{rem.id} {time_str}{status}\n    {rem.message}{task_info}")
 
-    return "\n".join(lines)
+        return "\n".join(lines)
 
 
 def cancel_reminder(reminder_id: int) -> str:
@@ -74,10 +72,9 @@ def cancel_reminder(reminder_id: int) -> str:
     Returns:
         Confirmation message or error if not found.
     """
-    session = get_session()
-    success = delete_reminder(session, reminder_id)
-    session.close()
+    with session_scope() as session:
+        success = delete_reminder(session, reminder_id)
 
-    if success:
-        return f"✓ Cancelled reminder <code>#{reminder_id}</code>"
-    return f"Reminder <code>#{reminder_id}</code> not found"
+        if success:
+            return f"Cancelled reminder #{reminder_id}"
+        return f"Reminder #{reminder_id} not found"

@@ -1,9 +1,13 @@
+from datetime import datetime, timedelta
+from functools import wraps
+from typing import Callable
+
 from telegram import Update
 from telegram.ext import ContextTypes
 
 from src.agent.tools import get_agenda, list_tasks
 from src.config import settings
-from src.db import get_session
+from src.db import session_scope
 from src.db.models import ShoppingListType
 from src.db.queries import (
     list_calendar_events_range,
@@ -12,7 +16,6 @@ from src.db.queries import (
     list_upcoming_birthdays,
 )
 from src.integrations.calendar import get_auth_url, complete_auth, is_calendar_connected
-from datetime import datetime, timedelta
 
 # Track if we're waiting for an auth code
 _awaiting_auth_code = False
@@ -26,92 +29,86 @@ def is_authorized(user_id: int) -> bool:
     return user_id == settings.telegram_user_id
 
 
+def require_auth(func: Callable) -> Callable:
+    """Decorator that requires user authorization for command handlers."""
+    @wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not update.message:
+            return
+        
+        user_id = update.effective_user.id if update.effective_user else None
+        if not user_id or not is_authorized(user_id):
+            await update.message.reply_text("Not authorized.")
+            return
+        
+        return await func(update, context)
+    return wrapper
+
+
+@require_auth
 async def tasks_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /tasks command - list pending tasks."""
-    if not update.message:
-        return
-
-    user_id = update.effective_user.id if update.effective_user else None
-    if not user_id or not is_authorized(user_id):
-        await update.message.reply_text("Not authorized.")
-        return
-
     in_progress = list_tasks(status="in_progress")
     todo = list_tasks(status="todo")
 
-    parts = ["<b>📋 Tasks</b>", ""]
+    parts = ["Tasks", ""]
 
-    if in_progress and in_progress != "No tasks found.":
-        parts.append("<b>🔄 In Progress</b>")
+    if in_progress and in_progress != "No tasks found. Try saying 'remind me to...' to create one!":
+        parts.append("In Progress")
         parts.append(in_progress)
         parts.append("")
 
-    if todo and todo != "No tasks found.":
-        parts.append("<b>📝 To Do</b>")
+    if todo and todo != "No tasks found. Try saying 'remind me to...' to create one!":
+        parts.append("To Do")
         parts.append(todo)
 
     if len(parts) == 2:  # Only header
-        parts.append("<i>No pending tasks!</i> 🎉")
+        parts.append("No pending tasks!")
 
     output = "\n".join(parts)
     _store_command_context("/tasks", output)
-    await update.message.reply_text(output, parse_mode="HTML")
+    await update.message.reply_text(output)
 
 
+@require_auth
 async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /today command - show today's agenda."""
-    if not update.message:
-        return
-
-    user_id = update.effective_user.id if update.effective_user else None
-    if not user_id or not is_authorized(user_id):
-        await update.message.reply_text("Not authorized.")
-        return
-
-    today_str = datetime.now().strftime("%A, %b %d")
+    today_str = datetime.now(settings.timezone).strftime("%A, %b %d")
     result = get_agenda()
 
-    output = f"📅 <b>{today_str}</b>\n\n{result}"
+    output = f"{today_str}\n\n{result}"
     _store_command_context("/today", output)
-    await update.message.reply_text(output, parse_mode="HTML")
+    await update.message.reply_text(output)
 
 
+@require_auth
 async def calendar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /calendar command - show upcoming calendar events."""
-    if not update.message:
-        return
+    with session_scope() as session:
+        now = datetime.now(settings.timezone).replace(tzinfo=None)
+        end = now + timedelta(days=7)
 
-    user_id = update.effective_user.id if update.effective_user else None
-    if not user_id or not is_authorized(user_id):
-        await update.message.reply_text("Not authorized.")
-        return
+        events = list_calendar_events_range(session, now, end)
 
-    session = get_session()
-    now = datetime.now(settings.timezone).replace(tzinfo=None)
-    end = now + timedelta(days=7)
+        if not events:
+            await update.message.reply_text("No events in the next 7 days.")
+            return
 
-    events = list_calendar_events_range(session, now, end)
-    session.close()
+        lines = ["Upcoming Events", ""]
 
-    if not events:
-        await update.message.reply_text("📆 <i>No events in the next 7 days.</i>", parse_mode="HTML")
-        return
+        current_day = None
+        for event in events:
+            event_day = event.start_time.strftime("%A, %b %d")
+            if event_day != current_day:
+                if current_day is not None:
+                    lines.append("")
+                lines.append(event_day)
+                current_day = event_day
 
-    lines = ["<b>📆 Upcoming Events</b>", ""]
+            time_str = event.start_time.strftime("%H:%M")
+            lines.append(f"  {time_str} - {event.title}")
 
-    current_day = None
-    for event in events:
-        event_day = event.start_time.strftime("%A, %b %d")
-        if event_day != current_day:
-            if current_day is not None:
-                lines.append("")
-            lines.append(f"<b>{event_day}</b>")
-            current_day = event_day
-
-        time_str = event.start_time.strftime("%H:%M")
-        lines.append(f"  {time_str} — {event.title}")
-
-    await update.message.reply_text("\n".join(lines), parse_mode="HTML")
+        await update.message.reply_text("\n".join(lines))
 
 
 async def auth_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -128,33 +125,29 @@ async def auth_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     # Check if already connected
     if is_calendar_connected():
-        await update.message.reply_text("✓ Google Calendar is already connected!")
+        await update.message.reply_text("Google Calendar is already connected!")
         return
 
     # Get auth URL
     auth_url = get_auth_url()
     if not auth_url:
         await update.message.reply_text(
-            "❌ Cannot start auth: credentials.json not found.\n"
+            "Cannot start auth: credentials.json not found.\n"
             "Upload it to credentials/credentials.json first."
         )
         return
 
     _awaiting_auth_code = True
     await update.message.reply_text(
-        "<b>🔗 Google Calendar Authorization</b>\n\n"
-        f'1. <a href="{auth_url}">Tap here to authorize</a>\n\n'
+        "Google Calendar Authorization\n\n"
+        f"1. Open this URL: {auth_url}\n\n"
         "2. Sign in with your Google account and allow access\n\n"
-        "3. You'll see a page that <b>won't load</b> - this is expected!\n\n"
-        "4. <b>On iPhone:</b> Tap the URL bar at the top to see the full URL\n"
-        "   <b>On desktop:</b> Look at the address bar\n\n"
-        "5. Find <code>code=</code> in the URL and copy everything after it until the <code>&amp;</code>\n"
-        "   Example URL: <code>localhost/?code=4/0AeanS0r...&amp;scope=...</code>\n"
-        "   Copy: <code>4/0AeanS0r...</code> (the part between <code>code=</code> and <code>&amp;</code>)\n\n"
-        "6. Send that code back to me here\n\n"
-        "<i>Waiting for your code...</i>",
-        parse_mode="HTML",
-        disable_web_page_preview=True,
+        "3. You'll see a page that won't load - this is expected!\n\n"
+        "4. Find 'code=' in the URL and copy everything after it until the '&'\n"
+        "   Example URL: localhost/?code=4/0AeanS0r...&scope=...\n"
+        "   Copy: 4/0AeanS0r... (the part between 'code=' and '&')\n\n"
+        "5. Send that code back to me here\n\n"
+        "Waiting for your code...",
     )
 
 
@@ -164,9 +157,9 @@ async def handle_auth_code(code: str) -> str:
     
     if complete_auth(code.strip()):
         _awaiting_auth_code = False
-        return "✓ Google Calendar connected successfully!"
+        return "Google Calendar connected successfully!"
     else:
-        return "❌ Invalid code. Try /auth again."
+        return "Invalid code. Try /auth again."
 
 
 def is_awaiting_auth_code() -> bool:
@@ -209,229 +202,178 @@ def _store_command_context(command: str, output: str) -> None:
     }
 
 
+@require_auth
 async def contacts_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /contacts command - list all contacts."""
-    if not update.message:
-        return
+    with session_scope() as session:
+        contacts = list_contacts(session)
 
-    user_id = update.effective_user.id if update.effective_user else None
-    if not user_id or not is_authorized(user_id):
-        await update.message.reply_text("Not authorized.")
-        return
+        if not contacts:
+            await update.message.reply_text("No contacts saved yet.")
+            return
 
-    session = get_session()
-    contacts = list_contacts(session)
-    session.close()
+        lines = ["Contacts", ""]
+        for contact in contacts:
+            alias_info = f" ({contact.aliases})" if contact.aliases else ""
+            bday_info = f" {contact.birthday.strftime('%b %d')}" if contact.birthday else ""
+            lines.append(f"  #{contact.id} {contact.name}{alias_info}{bday_info}")
 
-    if not contacts:
-        await update.message.reply_text("📇 No contacts saved yet.")
-        return
-
-    lines = ["<b>📇 Contacts</b>", ""]
-    for contact in contacts:
-        alias_info = f" <i>({contact.aliases})</i>" if contact.aliases else ""
-        bday_info = f" 🎂 {contact.birthday.strftime('%b %d')}" if contact.birthday else ""
-        lines.append(f"• <code>#{contact.id}</code> <b>{contact.name}</b>{alias_info}{bday_info}")
-
-    await update.message.reply_text("\n".join(lines), parse_mode="HTML")
+        await update.message.reply_text("\n".join(lines))
 
 
+@require_auth
 async def birthdays_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /birthdays command - show upcoming birthdays."""
-    if not update.message:
-        return
+    with session_scope() as session:
+        contacts = list_upcoming_birthdays(session, within_days=30)
 
-    user_id = update.effective_user.id if update.effective_user else None
-    if not user_id or not is_authorized(user_id):
-        await update.message.reply_text("Not authorized.")
-        return
+        if not contacts:
+            await update.message.reply_text("No birthdays in the next 30 days.")
+            return
 
-    session = get_session()
-    contacts = list_upcoming_birthdays(session, within_days=30)
-    session.close()
+        lines = ["Upcoming Birthdays", ""]
+        today = datetime.now(settings.timezone).date()
 
-    if not contacts:
-        await update.message.reply_text("🎂 No birthdays in the next 30 days.")
-        return
+        for contact in contacts:
+            if contact.birthday:
+                bday = contact.birthday.date() if hasattr(contact.birthday, 'date') else contact.birthday
+                this_year_bday = bday.replace(year=today.year)
+                if this_year_bday < today:
+                    this_year_bday = bday.replace(year=today.year + 1)
+                days_until = (this_year_bday - today).days
 
-    lines = ["<b>🎂 Upcoming Birthdays</b>", ""]
-    today = datetime.now().date()
+                if days_until == 0:
+                    when = "TODAY!"
+                elif days_until == 1:
+                    when = "tomorrow"
+                elif days_until <= 7:
+                    when = f"in {days_until} days"
+                else:
+                    when = f"in {days_until} days"
 
-    for contact in contacts:
-        if contact.birthday:
-            bday = contact.birthday.date() if hasattr(contact.birthday, 'date') else contact.birthday
-            this_year_bday = bday.replace(year=today.year)
-            if this_year_bday < today:
-                this_year_bday = bday.replace(year=today.year + 1)
-            days_until = (this_year_bday - today).days
+                lines.append(f"  {contact.name} - {this_year_bday.strftime('%b %d')} ({when})")
 
-            if days_until == 0:
-                when = "🔴 TODAY!"
-            elif days_until == 1:
-                when = "🟠 tomorrow"
-            elif days_until <= 7:
-                when = f"🟡 in {days_until} days"
-            else:
-                when = f"in {days_until} days"
-
-            lines.append(f"• <b>{contact.name}</b> — {this_year_bday.strftime('%b %d')} ({when})")
-
-    await update.message.reply_text("\n".join(lines), parse_mode="HTML")
+        await update.message.reply_text("\n".join(lines))
 
 
-def _format_shopping_list(items, list_type: ShoppingListType, emoji: str, title: str) -> str:
+def _format_shopping_list(items, list_type: ShoppingListType, title: str) -> str:
     """Format a shopping list for display."""
     filtered = [i for i in items if i.shopping_list.list_type == list_type]
 
     if not filtered:
-        return f"{emoji} <b>{title}</b>\n<i>Empty</i>"
+        return f"{title}\nEmpty"
 
     unchecked = [i for i in filtered if not i.is_complete]
     checked = [i for i in filtered if i.is_complete]
 
-    lines = [f"{emoji} <b>{title}</b>", ""]
+    lines = [title, ""]
 
     for item in unchecked:
         recipient_name = item.contact.name if item.contact else item.recipient
-        recipient = f" → <u>{recipient_name}</u>" if recipient_name else ""
+        recipient = f" -> {recipient_name}" if recipient_name else ""
         # Hide notes if redundant (mentions recipient or is just "Gift idea for X")
         notes = ""
         if item.notes and recipient_name:
             if recipient_name.lower() not in item.notes.lower():
-                notes = f" <i>({item.notes})</i>"
+                notes = f" ({item.notes})"
         elif item.notes:
-            notes = f" <i>({item.notes})</i>"
+            notes = f" ({item.notes})"
         # Show quantity progress if target > 1
         qty_info = f" ({item.quantity_purchased}/{item.quantity_target})" if item.quantity_target > 1 else ""
-        lines.append(f"⬜ <code>#{item.id}</code> {item.name}{qty_info}{recipient}{notes}")
+        lines.append(f"[ ] #{item.id} {item.name}{qty_info}{recipient}{notes}")
 
     if checked:
         lines.append("")
-        lines.append(f"<i>Checked ({len(checked)}):</i>")
+        lines.append(f"Checked ({len(checked)}):")
         for item in checked[:3]:  # Show max 3 checked
             qty_info = f" ({item.quantity_purchased}/{item.quantity_target})" if item.quantity_target > 1 else ""
-            lines.append(f"  ☑️ <code>#{item.id}</code> <s>{item.name}</s>{qty_info}")
+            lines.append(f"  [x] #{item.id} {item.name}{qty_info}")
         if len(checked) > 3:
-            lines.append(f"  <i>...and {len(checked) - 3} more</i>")
+            lines.append(f"  ...and {len(checked) - 3} more")
 
     return "\n".join(lines)
 
 
+@require_auth
 async def groceries_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /groceries command - show groceries list."""
-    if not update.message:
-        return
-
-    user_id = update.effective_user.id if update.effective_user else None
-    if not user_id or not is_authorized(user_id):
-        await update.message.reply_text("Not authorized.")
-        return
-
-    session = get_session()
-    items = list_shopping_items(session, ShoppingListType.GROCERIES, include_checked=True)
-    output = _format_shopping_list(items, ShoppingListType.GROCERIES, "🛒", "Groceries")
-    session.close()
+    with session_scope() as session:
+        items = list_shopping_items(session, ShoppingListType.GROCERIES, include_checked=True)
+        output = _format_shopping_list(items, ShoppingListType.GROCERIES, "Groceries")
 
     _store_command_context("/groceries", output)
-    await update.message.reply_text(output, parse_mode="HTML")
+    await update.message.reply_text(output)
 
 
+@require_auth
 async def gifts_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /gifts command - show gifts list."""
-    if not update.message:
-        return
-
-    user_id = update.effective_user.id if update.effective_user else None
-    if not user_id or not is_authorized(user_id):
-        await update.message.reply_text("Not authorized.")
-        return
-
-    session = get_session()
-    items = list_shopping_items(session, ShoppingListType.GIFTS, include_checked=True)
-    output = _format_shopping_list(items, ShoppingListType.GIFTS, "🎁", "Gift Ideas")
-    session.close()
+    with session_scope() as session:
+        items = list_shopping_items(session, ShoppingListType.GIFTS, include_checked=True)
+        output = _format_shopping_list(items, ShoppingListType.GIFTS, "Gift Ideas")
 
     _store_command_context("/gifts", output)
-    await update.message.reply_text(output, parse_mode="HTML")
+    await update.message.reply_text(output)
 
 
+@require_auth
 async def wishlist_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /wishlist command - show wishlist."""
-    if not update.message:
-        return
-
-    user_id = update.effective_user.id if update.effective_user else None
-    if not user_id or not is_authorized(user_id):
-        await update.message.reply_text("Not authorized.")
-        return
-
-    session = get_session()
-    items = list_shopping_items(session, ShoppingListType.WISHLIST, include_checked=True)
-    output = _format_shopping_list(items, ShoppingListType.WISHLIST, "✨", "Wishlist")
-    session.close()
+    with session_scope() as session:
+        items = list_shopping_items(session, ShoppingListType.WISHLIST, include_checked=True)
+        output = _format_shopping_list(items, ShoppingListType.WISHLIST, "Wishlist")
 
     _store_command_context("/wishlist", output)
-    await update.message.reply_text(output, parse_mode="HTML")
+    await update.message.reply_text(output)
 
 
+@require_auth
 async def lists_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /lists command - show all shopping lists."""
-    if not update.message:
-        return
-
-    user_id = update.effective_user.id if update.effective_user else None
-    if not user_id or not is_authorized(user_id):
-        await update.message.reply_text("Not authorized.")
-        return
-
-    session = get_session()
-    all_items = list_shopping_items(session, include_checked=True)
-    
-    parts = []
-    for lt, emoji, title in [
-        (ShoppingListType.GROCERIES, "🛒", "Groceries"),
-        (ShoppingListType.GIFTS, "🎁", "Gift Ideas"),
-        (ShoppingListType.WISHLIST, "✨", "Wishlist"),
-    ]:
-        parts.append(_format_shopping_list(all_items, lt, emoji, title))
-    
-    session.close()
+    with session_scope() as session:
+        all_items = list_shopping_items(session, include_checked=True)
+        
+        parts = []
+        for lt, title in [
+            (ShoppingListType.GROCERIES, "Groceries"),
+            (ShoppingListType.GIFTS, "Gift Ideas"),
+            (ShoppingListType.WISHLIST, "Wishlist"),
+        ]:
+            parts.append(_format_shopping_list(all_items, lt, title))
 
     output = "\n\n".join(parts)
     _store_command_context("/lists", output)
-    await update.message.reply_text(output, parse_mode="HTML")
+    await update.message.reply_text(output)
 
 
+@require_auth
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /help command - show available commands."""
-    if not update.message:
-        return
+    calendar_status = "connected" if is_calendar_connected() else "not connected (/auth)"
 
-    calendar_status = "✓" if is_calendar_connected() else "✗ (/auth)"
+    help_text = f"""Commands
 
-    help_text = f"""<b>📋 Commands</b>
+Tasks & Agenda
+/tasks - pending tasks
+/today - today's agenda
+/calendar - upcoming events
 
-<b>Tasks &amp; Agenda</b>
-/tasks — pending tasks
-/today — today's agenda
-/calendar — upcoming events
+Shopping Lists
+/lists - all lists
+/groceries - grocery items
+/gifts - gift ideas
+/wishlist - wishlist
 
-<b>Shopping Lists</b>
-/lists — all lists
-/groceries — grocery items
-/gifts — gift ideas
-/wishlist — wishlist
+Contacts
+/contacts - all contacts
+/birthdays - upcoming birthdays
 
-<b>Contacts</b>
-/contacts — all contacts
-/birthdays — upcoming birthdays
+Settings
+/auth - connect Google Calendar
+/help - this help
 
-<b>Settings</b>
-/auth — connect Google Calendar
-/help — this help
+---
+Calendar: {calendar_status}
 
-─────────────────
-📅 Calendar: {calendar_status}
-
-<i>Or just chat with me!</i>"""
-    await update.message.reply_text(help_text, parse_mode="HTML")
+Or just chat with me!"""
+    await update.message.reply_text(help_text)

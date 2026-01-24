@@ -1,4 +1,6 @@
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Generator
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -7,6 +9,23 @@ from .models import Base
 
 _engine = None
 _SessionLocal = None
+
+
+@contextmanager
+def session_scope() -> Generator[Session, None, None]:
+    """Provide a transactional scope around a series of operations.
+    
+    Usage:
+        with session_scope() as session:
+            # use session
+    
+    Session is automatically closed on exit, even if an exception occurs.
+    """
+    session = get_session()
+    try:
+        yield session
+    finally:
+        session.close()
 
 
 def init_database(database_path: Path) -> None:

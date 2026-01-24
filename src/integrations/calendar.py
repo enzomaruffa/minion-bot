@@ -151,27 +151,31 @@ def fetch_events(start: datetime, end: datetime) -> list[dict]:
         end: End of time range.
 
     Returns:
-        List of event dictionaries.
+        List of event dictionaries. Empty list on error.
     """
-    creds = get_credentials()
-    if not creds:
-        return []
+    try:
+        creds = get_credentials()
+        if not creds:
+            return []
 
-    service = build("calendar", "v3", credentials=creds)
+        service = build("calendar", "v3", credentials=creds)
 
-    events_result = (
-        service.events()
-        .list(
-            calendarId="primary",
-            timeMin=start.isoformat() + "Z",
-            timeMax=end.isoformat() + "Z",
-            singleEvents=True,
-            orderBy="startTime",
+        events_result = (
+            service.events()
+            .list(
+                calendarId="primary",
+                timeMin=start.isoformat() + "Z",
+                timeMax=end.isoformat() + "Z",
+                singleEvents=True,
+                orderBy="startTime",
+            )
+            .execute()
         )
-        .execute()
-    )
 
-    return events_result.get("items", [])
+        return events_result.get("items", [])
+    except Exception as e:
+        logger.exception(f"Failed to fetch calendar events: {e}")
+        return []
 
 
 def sync_events(start: datetime, end: datetime) -> int:
@@ -184,35 +188,36 @@ def sync_events(start: datetime, end: datetime) -> int:
     Returns:
         Number of events synced.
     """
+    from src.db import session_scope
+    
     events = fetch_events(start, end)
-    session = get_session()
-
+    
     count = 0
-    for event in events:
-        google_id = event.get("id")
-        title = event.get("summary", "Untitled")
+    with session_scope() as session:
+        for event in events:
+            google_id = event.get("id")
+            title = event.get("summary", "Untitled")
 
-        # Parse start/end times
-        start_data = event.get("start", {})
-        end_data = event.get("end", {})
+            # Parse start/end times
+            start_data = event.get("start", {})
+            end_data = event.get("end", {})
 
-        # Handle all-day events vs timed events
-        if "dateTime" in start_data:
-            start_time = datetime.fromisoformat(start_data["dateTime"].replace("Z", "+00:00"))
-            end_time = datetime.fromisoformat(end_data["dateTime"].replace("Z", "+00:00"))
-        else:
-            # All-day event
-            start_time = datetime.fromisoformat(start_data["date"])
-            end_time = datetime.fromisoformat(end_data["date"])
+            # Handle all-day events vs timed events
+            if "dateTime" in start_data:
+                start_time = datetime.fromisoformat(start_data["dateTime"].replace("Z", "+00:00"))
+                end_time = datetime.fromisoformat(end_data["dateTime"].replace("Z", "+00:00"))
+            else:
+                # All-day event
+                start_time = datetime.fromisoformat(start_data["date"])
+                end_time = datetime.fromisoformat(end_data["date"])
 
-        # Remove timezone info for storage
-        start_time = start_time.replace(tzinfo=None)
-        end_time = end_time.replace(tzinfo=None)
+            # Remove timezone info for storage
+            start_time = start_time.replace(tzinfo=None)
+            end_time = end_time.replace(tzinfo=None)
 
-        sync_calendar_event(session, google_id, title, start_time, end_time)
-        count += 1
+            sync_calendar_event(session, google_id, title, start_time, end_time)
+            count += 1
 
-    session.close()
     return count
 
 

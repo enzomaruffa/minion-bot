@@ -42,3 +42,21 @@ def parse_date(text: str) -> Optional[datetime]:
     )
     
     return parsed
+
+
+def format_date(dt: Optional[datetime], include_time: bool = False) -> str:
+    """Format a datetime consistently across the application.
+    
+    Args:
+        dt: The datetime to format
+        include_time: If True, include time in the output
+        
+    Returns:
+        Formatted date string like "Jan 15" or "Jan 15 14:30"
+    """
+    if not dt:
+        return ""
+    
+    if include_time:
+        return dt.strftime("%b %d %H:%M")
+    return dt.strftime("%b %d")

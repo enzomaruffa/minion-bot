@@ -1,14 +1,12 @@
 from typing import Optional
 
-from src.db import get_session
+from src.db import session_scope
 from src.db.queries import (
     create_user_project,
     get_project_by_name,
-    get_user_project,
     get_user_project_by_name,
     list_user_projects as db_list_user_projects,
     get_tasks_by_user_project,
-    update_user_project,
     delete_user_project,
     update_task,
 )
@@ -17,7 +15,7 @@ from src.db.queries import (
 def create_project(
     name: str,
     description: Optional[str] = None,
-    emoji: str = "📁",
+    emoji: str = "folder",
     tag: Optional[str] = None,
 ) -> str:
     """Create a new project to organize related tasks.
@@ -25,38 +23,35 @@ def create_project(
     Args:
         name: Name of the project (e.g., "MinionBot", "House Renovation").
         description: Optional description of the project.
-        emoji: Emoji for the project. Defaults to 📁.
+        emoji: Emoji for the project. Defaults to folder.
         tag: Optional category tag (Work/Personal/Health/Finance/Social/Learning).
 
     Returns:
         Confirmation message with the created project.
     """
-    session = get_session()
+    with session_scope() as session:
+        # Check if project already exists
+        existing = get_user_project_by_name(session, name)
+        if existing:
+            return f"Project '{name}' already exists."
 
-    # Check if project already exists
-    existing = get_user_project_by_name(session, name)
-    if existing:
-        session.close()
-        return f"Project '{name}' already exists."
+        # Resolve tag to project_id
+        tag_id = None
+        if tag:
+            tag_obj = get_project_by_name(session, tag)
+            if tag_obj:
+                tag_id = tag_obj.id
 
-    # Resolve tag to project_id
-    tag_id = None
-    if tag:
-        tag_obj = get_project_by_name(session, tag)
-        if tag_obj:
-            tag_id = tag_obj.id
+        project = create_user_project(
+            session,
+            name=name,
+            description=description,
+            emoji=emoji,
+            tag_id=tag_id,
+        )
 
-    project = create_user_project(
-        session,
-        name=name,
-        description=description,
-        emoji=emoji,
-        tag_id=tag_id,
-    )
-    session.close()
-
-    tag_info = f" [{tag}]" if tag else ""
-    return f"✓ Created project {emoji} <b>{name}</b>{tag_info}"
+        tag_info = f" [{tag}]" if tag else ""
+        return f"Created project {emoji} {name}{tag_info}"
 
 
 def list_projects_tool(include_archived: bool = False) -> str:
@@ -68,26 +63,43 @@ def list_projects_tool(include_archived: bool = False) -> str:
     Returns:
         List of projects with task counts.
     """
-    session = get_session()
-    projects = db_list_user_projects(session, include_archived=include_archived)
+    with session_scope() as session:
+        projects = db_list_user_projects(session, include_archived=include_archived)
 
-    if not projects:
-        session.close()
-        return "No projects yet. Create one with create_project."
+        if not projects:
+            return "No projects yet. Create one with create_project."
 
-    lines = ["<b>📂 Projects</b>", ""]
-    for p in projects:
-        tasks = get_tasks_by_user_project(session, p.id)
-        pending = sum(1 for t in tasks if t.status.value in ("todo", "in_progress"))
-        done = sum(1 for t in tasks if t.status.value == "done")
+        # Batch load all tasks for all project IDs to avoid N+1 query
+        project_ids = [p.id for p in projects]
+        from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
+        from src.db.models import Task
+        
+        stmt = (
+            select(Task)
+            .options(selectinload(Task.project))
+            .where(Task.user_project_id.in_(project_ids))
+        )
+        all_tasks = session.scalars(stmt).all()
+        
+        # Group tasks by project
+        tasks_by_project: dict[int, list] = {pid: [] for pid in project_ids}
+        for task in all_tasks:
+            if task.user_project_id in tasks_by_project:
+                tasks_by_project[task.user_project_id].append(task)
 
-        tag_info = f" <i>[{p.tag.name}]</i>" if p.tag else ""
-        archived = " <s>(archived)</s>" if p.archived else ""
-        lines.append(f"<code>#{p.id}</code> {p.emoji} <b>{p.name}</b>{tag_info}{archived}")
-        lines.append(f"   {pending} pending, {done} done")
+        lines = ["Projects", ""]
+        for p in projects:
+            tasks = tasks_by_project.get(p.id, [])
+            pending = sum(1 for t in tasks if t.status.value in ("todo", "in_progress"))
+            done = sum(1 for t in tasks if t.status.value == "done")
 
-    session.close()
-    return "\n".join(lines)
+            tag_info = f" [{p.tag.name}]" if p.tag else ""
+            archived = " (archived)" if p.archived else ""
+            lines.append(f"#{p.id} {p.emoji} {p.name}{tag_info}{archived}")
+            lines.append(f"   {pending} pending, {done} done")
+
+        return "\n".join(lines)
 
 
 def show_project(project_name: str) -> str:
@@ -99,50 +111,48 @@ def show_project(project_name: str) -> str:
     Returns:
         Project details and list of tasks.
     """
-    session = get_session()
-    project = get_user_project_by_name(session, project_name)
+    with session_scope() as session:
+        project = get_user_project_by_name(session, project_name)
 
-    if not project:
-        session.close()
-        return f"Project '{project_name}' not found."
+        if not project:
+            return f"Project '{project_name}' not found."
 
-    tasks = get_tasks_by_user_project(session, project.id)
+        tasks = get_tasks_by_user_project(session, project.id)
 
-    lines = [
-        f"{project.emoji} <b>{project.name}</b>",
-    ]
+        lines = [
+            f"{project.emoji} {project.name}",
+        ]
 
-    if project.description:
-        lines.append(f"<i>{project.description}</i>")
+        if project.description:
+            lines.append(f"{project.description}")
 
-    if project.tag:
-        lines.append(f"Tag: {project.tag.emoji} {project.tag.name}")
+        if project.tag:
+            lines.append(f"Tag: {project.tag.emoji} {project.tag.name}")
 
-    lines.append("")
+        lines.append("")
 
-    if not tasks:
-        lines.append("<i>No tasks in this project</i>")
-    else:
-        # Group by status
-        in_progress = [t for t in tasks if t.status.value == "in_progress"]
-        todo = [t for t in tasks if t.status.value == "todo"]
-        done = [t for t in tasks if t.status.value == "done"]
+        if not tasks:
+            lines.append("No tasks in this project")
+        else:
+            # Group by status
+            in_progress = [t for t in tasks if t.status.value == "in_progress"]
+            todo = [t for t in tasks if t.status.value == "todo"]
+            done = [t for t in tasks if t.status.value == "done"]
 
-        if in_progress:
-            lines.append("<b>🔄 In Progress</b>")
-            for t in in_progress:
-                lines.append(f"  • <code>#{t.id}</code> {t.title}")
+            if in_progress:
+                lines.append("In Progress")
+                for t in in_progress:
+                    lines.append(f"  #{t.id} {t.title}")
 
-        if todo:
-            lines.append("<b>📝 To Do</b>")
-            for t in todo:
-                lines.append(f"  • <code>#{t.id}</code> {t.title}")
+            if todo:
+                lines.append("To Do")
+                for t in todo:
+                    lines.append(f"  #{t.id} {t.title}")
 
-        if done:
-            lines.append(f"<i>✅ {len(done)} completed</i>")
+            if done:
+                lines.append(f"{len(done)} completed")
 
-    session.close()
-    return "\n".join(lines)
+        return "\n".join(lines)
 
 
 def assign_to_project(task_id: int, project_name: str) -> str:
@@ -155,20 +165,18 @@ def assign_to_project(task_id: int, project_name: str) -> str:
     Returns:
         Confirmation message.
     """
-    session = get_session()
-    project = get_user_project_by_name(session, project_name)
+    with session_scope() as session:
+        project = get_user_project_by_name(session, project_name)
 
-    if not project:
-        session.close()
-        return f"Project '{project_name}' not found."
+        if not project:
+            return f"Project '{project_name}' not found."
 
-    task = update_task(session, task_id, user_project_id=project.id)
-    session.close()
+        task = update_task(session, task_id, user_project_id=project.id)
 
-    if not task:
-        return f"Task #{task_id} not found."
+        if not task:
+            return f"Task #{task_id} not found."
 
-    return f"✓ Assigned <code>#{task_id}</code> to {project.emoji} {project.name}"
+        return f"Assigned #{task_id} to {project.emoji} {project.name}"
 
 
 def unassign_from_project(task_id: int) -> str:
@@ -180,14 +188,13 @@ def unassign_from_project(task_id: int) -> str:
     Returns:
         Confirmation message.
     """
-    session = get_session()
-    task = update_task(session, task_id, clear_user_project=True)
-    session.close()
+    with session_scope() as session:
+        task = update_task(session, task_id, clear_user_project=True)
 
-    if not task:
-        return f"Task #{task_id} not found."
+        if not task:
+            return f"Task #{task_id} not found."
 
-    return f"✓ Removed <code>#{task_id}</code> from project"
+        return f"Removed #{task_id} from project"
 
 
 def archive_project(project_name: str) -> str:
@@ -199,14 +206,12 @@ def archive_project(project_name: str) -> str:
     Returns:
         Confirmation message.
     """
-    session = get_session()
-    project = get_user_project_by_name(session, project_name)
+    with session_scope() as session:
+        project = get_user_project_by_name(session, project_name)
 
-    if not project:
-        session.close()
-        return f"Project '{project_name}' not found."
+        if not project:
+            return f"Project '{project_name}' not found."
 
-    delete_user_project(session, project.id)
-    session.close()
+        delete_user_project(session, project.id)
 
-    return f"✓ Archived project {project.emoji} {project.name}"
+        return f"Archived project {project.emoji} {project.name}"

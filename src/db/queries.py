@@ -763,9 +763,10 @@ def delete_contact(session: Session, contact_id: int) -> bool:
 def list_upcoming_birthdays(session: Session, within_days: int = 14) -> Sequence[Contact]:
     """List contacts with birthdays within the next N days."""
     from datetime import timedelta
+    from src.config import settings
 
     contacts = list_contacts(session)
-    today = datetime.now().date()
+    today = datetime.now(settings.timezone).date()
     upcoming = []
 
     for contact in contacts:

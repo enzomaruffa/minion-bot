@@ -292,12 +292,15 @@ def _format_shopping_list(items, list_type: ShoppingListType, emoji: str, title:
     lines = [f"{emoji} <b>{title}</b>", ""]
 
     for item in unchecked:
-        recipient = ""
-        if item.contact:
-            recipient = f" → {item.contact.name}"
-        elif item.recipient:
-            recipient = f" → {item.recipient}"
-        notes = f" <i>({item.notes})</i>" if item.notes else ""
+        recipient_name = item.contact.name if item.contact else item.recipient
+        recipient = f" → <u>{recipient_name}</u>" if recipient_name else ""
+        # Hide notes if redundant (mentions recipient or is just "Gift idea for X")
+        notes = ""
+        if item.notes and recipient_name:
+            if recipient_name.lower() not in item.notes.lower():
+                notes = f" <i>({item.notes})</i>"
+        elif item.notes:
+            notes = f" <i>({item.notes})</i>"
         # Show quantity progress if target > 1
         qty_info = f" ({item.quantity_purchased}/{item.quantity_target})" if item.quantity_target > 1 else ""
         lines.append(f"⬜ {item.name}{qty_info}{recipient}{notes}")

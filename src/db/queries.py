@@ -1,8 +1,9 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Sequence
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.sql import Select
 
 from .models import (
     Attachment,
@@ -22,6 +23,34 @@ from .models import (
 )
 
 
+# ============================================================================
+# Base Query Helpers (DRY)
+# ============================================================================
+
+def _task_query() -> Select[tuple[Task]]:
+    """Base query for Task with common eager loads."""
+    return (
+        select(Task)
+        .options(
+            selectinload(Task.project),
+            selectinload(Task.user_project),
+            selectinload(Task.contact),
+        )
+    )
+
+
+def _shopping_item_query() -> Select[tuple[ShoppingItem]]:
+    """Base query for ShoppingItem with common eager loads."""
+    return (
+        select(ShoppingItem)
+        .options(
+            selectinload(ShoppingItem.shopping_list),
+            selectinload(ShoppingItem.contact),
+        )
+    )
+
+
+# ============================================================================
 # Default projects to seed
 DEFAULT_PROJECTS = [
     ("Work", "💼"),
@@ -147,11 +176,7 @@ def delete_user_project(session: Session, project_id: int) -> bool:
 def get_tasks_by_user_project(session: Session, project_id: int) -> Sequence[Task]:
     """Get all tasks in a user project."""
     stmt = (
-        select(Task)
-        .options(
-            selectinload(Task.project),
-            selectinload(Task.contact),
-        )
+        _task_query()
         .where(Task.user_project_id == project_id)
         .order_by(Task.created_at.desc())
     )
@@ -187,15 +212,7 @@ def create_task(
 
 
 def get_task(session: Session, task_id: int) -> Optional[Task]:
-    stmt = (
-        select(Task)
-        .options(
-            selectinload(Task.project),
-            selectinload(Task.user_project),
-            selectinload(Task.contact),
-        )
-        .where(Task.id == task_id)
-    )
+    stmt = _task_query().where(Task.id == task_id)
     return session.scalars(stmt).first()
 
 
@@ -267,15 +284,7 @@ def list_tasks_by_status(
     root_only: bool = False,
     project_id: Optional[int] = None,
 ) -> Sequence[Task]:
-    stmt = (
-        select(Task)
-        .options(
-            selectinload(Task.project),
-            selectinload(Task.user_project),
-            selectinload(Task.contact),
-        )
-        .order_by(Task.created_at.desc())
-    )
+    stmt = _task_query().order_by(Task.created_at.desc())
     if status:
         stmt = stmt.where(Task.status == status)
     if root_only:
@@ -288,12 +297,7 @@ def list_tasks_by_status(
 def list_overdue_tasks(session: Session, now: datetime) -> Sequence[Task]:
     """Get tasks that are overdue (past due date and not done/cancelled)."""
     stmt = (
-        select(Task)
-        .options(
-            selectinload(Task.project),
-            selectinload(Task.user_project),
-            selectinload(Task.contact),
-        )
+        _task_query()
         .where(Task.due_date < now)
         .where(Task.status.in_([TaskStatus.TODO, TaskStatus.IN_PROGRESS]))
         .order_by(Task.due_date)
@@ -303,15 +307,9 @@ def list_overdue_tasks(session: Session, now: datetime) -> Sequence[Task]:
 
 def list_tasks_due_soon(session: Session, now: datetime, within_hours: int = 24) -> Sequence[Task]:
     """Get tasks due within the next N hours."""
-    from datetime import timedelta
     deadline = now + timedelta(hours=within_hours)
     stmt = (
-        select(Task)
-        .options(
-            selectinload(Task.project),
-            selectinload(Task.user_project),
-            selectinload(Task.contact),
-        )
+        _task_query()
         .where(Task.due_date >= now)
         .where(Task.due_date <= deadline)
         .where(Task.status.in_([TaskStatus.TODO, TaskStatus.IN_PROGRESS]))
@@ -338,12 +336,7 @@ def count_tasks_by_due_date(session: Session, date: datetime) -> int:
 def get_subtasks(session: Session, task_id: int) -> Sequence[Task]:
     """Get all subtasks of a given task."""
     stmt = (
-        select(Task)
-        .options(
-            selectinload(Task.project),
-            selectinload(Task.user_project),
-            selectinload(Task.contact),
-        )
+        _task_query()
         .where(Task.parent_id == task_id)
         .order_by(Task.created_at)
     )
@@ -361,12 +354,7 @@ def get_task_with_subtasks(session: Session, task_id: int) -> Optional[Task]:
 
 def search_tasks(session: Session, query: str) -> Sequence[Task]:
     stmt = (
-        select(Task)
-        .options(
-            selectinload(Task.project),
-            selectinload(Task.user_project),
-            selectinload(Task.contact),
-        )
+        _task_query()
         .where(Task.title.ilike(f"%{query}%") | Task.description.ilike(f"%{query}%"))
         .order_by(Task.created_at.desc())
     )
@@ -576,14 +564,7 @@ def create_shopping_item(
 
 def get_shopping_item(session: Session, item_id: int) -> Optional[ShoppingItem]:
     """Get a shopping item by ID."""
-    stmt = (
-        select(ShoppingItem)
-        .options(
-            selectinload(ShoppingItem.shopping_list),
-            selectinload(ShoppingItem.contact),
-        )
-        .where(ShoppingItem.id == item_id)
-    )
+    stmt = _shopping_item_query().where(ShoppingItem.id == item_id)
     return session.scalars(stmt).first()
 
 
@@ -593,14 +574,7 @@ def list_shopping_items(
     include_checked: bool = True,
 ) -> Sequence[ShoppingItem]:
     """List shopping items, optionally filtered by list type."""
-    stmt = (
-        select(ShoppingItem)
-        .options(
-            selectinload(ShoppingItem.shopping_list),
-            selectinload(ShoppingItem.contact),
-        )
-        .order_by(ShoppingItem.created_at.desc())
-    )
+    stmt = _shopping_item_query().order_by(ShoppingItem.created_at.desc())
     if list_type:
         shopping_list = get_shopping_list_by_type(session, list_type)
         if shopping_list:
@@ -762,7 +736,6 @@ def delete_contact(session: Session, contact_id: int) -> bool:
 
 def list_upcoming_birthdays(session: Session, within_days: int = 14) -> Sequence[Contact]:
     """List contacts with birthdays within the next N days."""
-    from datetime import timedelta
     from src.config import settings
 
     contacts = list_contacts(session)
@@ -791,7 +764,7 @@ def list_upcoming_birthdays(session: Session, within_days: int = 14) -> Sequence
 def get_tasks_by_contact(session: Session, contact_id: int) -> Sequence[Task]:
     """Get all tasks linked to a contact."""
     stmt = (
-        select(Task)
+        _task_query()
         .where(Task.contact_id == contact_id)
         .order_by(Task.created_at.desc())
     )
@@ -801,8 +774,7 @@ def get_tasks_by_contact(session: Session, contact_id: int) -> Sequence[Task]:
 def get_gifts_by_contact(session: Session, contact_id: int) -> Sequence[ShoppingItem]:
     """Get all gift items linked to a contact."""
     stmt = (
-        select(ShoppingItem)
-        .options(selectinload(ShoppingItem.shopping_list))
+        _shopping_item_query()
         .where(ShoppingItem.contact_id == contact_id)
         .order_by(ShoppingItem.created_at.desc())
     )

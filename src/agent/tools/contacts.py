@@ -75,7 +75,7 @@ def show_contacts() -> str:
         task_info = f" [{task_count} task{'s' if task_count != 1 else ''}]" if task_count > 0 else ""
         notes_info = f" - {contact.notes}" if contact.notes else ""
 
-        lines.append(f"  • <b>{contact.name}</b>{alias_info}{bday_info}{task_info}{notes_info}")
+        lines.append(f"  • <code>#{contact.id}</code> <b>{contact.name}</b>{alias_info}{bday_info}{task_info}{notes_info}")
 
     session.close()
     return "\n".join(lines)

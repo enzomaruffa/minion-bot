@@ -229,9 +229,9 @@ async def contacts_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     lines = ["<b>📇 Contacts</b>", ""]
     for contact in contacts:
-        alias_info = f" <i>{contact.aliases}</i>" if contact.aliases else ""
+        alias_info = f" <i>({contact.aliases})</i>" if contact.aliases else ""
         bday_info = f" 🎂 {contact.birthday.strftime('%b %d')}" if contact.birthday else ""
-        lines.append(f"• <b>{contact.name}</b>{alias_info}{bday_info}")
+        lines.append(f"• <code>#{contact.id}</code> <b>{contact.name}</b>{alias_info}{bday_info}")
 
     await update.message.reply_text("\n".join(lines), parse_mode="HTML")
 

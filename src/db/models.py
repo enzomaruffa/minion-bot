@@ -50,6 +50,7 @@ class Contact(Base):
 
 
 class Project(Base):
+    """Category/tag for tasks (Work, Personal, Health, etc.)."""
     __tablename__ = "projects"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -58,6 +59,22 @@ class Project(Base):
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
 
     tasks: Mapped[list["Task"]] = relationship(back_populates="project")
+
+
+class UserProject(Base):
+    """User-created project with tasks (e.g., MinionBot, House Renovation)."""
+    __tablename__ = "user_projects"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    emoji: Mapped[str] = mapped_column(String(10), default="📁")
+    tag_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id"), nullable=True)
+    archived: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+
+    tag: Mapped[Optional["Project"]] = relationship()
+    tasks: Mapped[list["Task"]] = relationship(back_populates="user_project")
 
 
 class Task(Base):
@@ -71,6 +88,7 @@ class Task(Base):
     due_date: Mapped[Optional[datetime]] = mapped_column(nullable=True)
     parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tasks.id"), nullable=True)
     project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id"), nullable=True)
+    user_project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user_projects.id"), nullable=True)
     contact_id: Mapped[Optional[int]] = mapped_column(ForeignKey("contacts.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
@@ -84,6 +102,7 @@ class Task(Base):
     attachments: Mapped[list["Attachment"]] = relationship(back_populates="task")
     reminders: Mapped[list["Reminder"]] = relationship(back_populates="task")
     project: Mapped[Optional["Project"]] = relationship(back_populates="tasks")
+    user_project: Mapped[Optional["UserProject"]] = relationship(back_populates="tasks")
     contact: Mapped[Optional["Contact"]] = relationship(back_populates="tasks")
 
 

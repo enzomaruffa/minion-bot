@@ -10,6 +10,7 @@ from src.db.queries import (
     get_contact,
     get_contact_by_name,
     get_project_by_name,
+    get_user_project_by_name,
     get_task,
     get_subtasks,
     list_projects as db_list_projects,
@@ -28,7 +29,8 @@ def add_tasks(tasks: list[dict]) -> str:
                priority (optional: low/medium/high/urgent), due_date (optional: natural language
                like "tomorrow", "next Monday", "in 2 hours" or ISO format),
                parent_id (optional: ID of parent task for creating subtasks),
-               project (optional: project name like "Work", "Personal", "Health", etc.),
+               project (optional: tag/category name like "Work", "Personal", "Health", etc.),
+               user_project (optional: user-created project name like "MinionBot"),
                contact (optional: contact name to link the task to)
 
     Returns:
@@ -51,12 +53,19 @@ def add_tasks(tasks: list[dict]) -> str:
 
         parent_id = task_data.get("parent_id")
 
-        # Resolve project by name
+        # Resolve project/tag by name
         project_id = None
         if project_name := task_data.get("project"):
             project = get_project_by_name(session, project_name)
             if project:
                 project_id = project.id
+
+        # Resolve user_project by name
+        user_project_id = None
+        if user_project_name := task_data.get("user_project"):
+            user_project = get_user_project_by_name(session, user_project_name)
+            if user_project:
+                user_project_id = user_project.id
 
         # Resolve contact by name
         contact_id = None
@@ -73,6 +82,7 @@ def add_tasks(tasks: list[dict]) -> str:
             due_date=due_date,
             parent_id=parent_id,
             project_id=project_id,
+            user_project_id=user_project_id,
             contact_id=contact_id,
         )
         created_ids.append(task.id)
@@ -92,6 +102,7 @@ def update_task_tool(
     priority: Optional[str] = None,
     due_date: Optional[str] = None,
     project: Optional[str] = None,
+    user_project: Optional[str] = None,
     contact: Optional[str] = None,
 ) -> str:
     """Update an existing task.
@@ -103,7 +114,8 @@ def update_task_tool(
         status: New status (todo/in_progress/done/cancelled).
         priority: New priority (low/medium/high/urgent).
         due_date: New due date (natural language like "tomorrow" or ISO format).
-        project: Project name (Work/Personal/Health/Finance/Social/Learning).
+        project: Tag/category name (Work/Personal/Health/Finance/Social/Learning).
+        user_project: User-created project name to assign task to.
         contact: Contact name to link this task to.
 
     Returns:
@@ -115,12 +127,19 @@ def update_task_tool(
     priority_enum = TaskPriority(priority.lower()) if priority else None
     due_dt = parse_date(due_date) if due_date else None
 
-    # Resolve project by name
+    # Resolve project/tag by name
     project_id = None
     if project:
         proj = get_project_by_name(session, project)
         if proj:
             project_id = proj.id
+
+    # Resolve user_project by name
+    user_project_id = None
+    if user_project:
+        up = get_user_project_by_name(session, user_project)
+        if up:
+            user_project_id = up.id
 
     # Resolve contact by name
     contact_id = None
@@ -138,6 +157,7 @@ def update_task_tool(
         priority=priority_enum,
         due_date=due_dt,
         project_id=project_id,
+        user_project_id=user_project_id,
         contact_id=contact_id,
     )
     session.close()
@@ -151,11 +171,12 @@ def update_task_tool(
 def _format_task_line(task: Task, indent: int = 0) -> str:
     """Format a single task line with optional indentation."""
     prefix = "  └ " if indent > 0 else "• "
-    project_emoji = task.project.emoji + " " if task.project else ""
+    tag_emoji = task.project.emoji + " " if task.project else ""
+    user_proj = f" [{task.user_project.emoji}{task.user_project.name}]" if task.user_project else ""
     contact_info = f" → <u>{task.contact.name}</u>" if task.contact else ""
     due = f" <i>{task.due_date.strftime('%b %d')}</i>" if task.due_date else ""
     status_icon = {"todo": "⬜", "in_progress": "🔄", "done": "✅", "cancelled": "❌"}.get(task.status.value, "")
-    return f"{prefix}<code>#{task.id}</code> {project_emoji}{task.title}{contact_info}{due} {status_icon}"
+    return f"{prefix}<code>#{task.id}</code> {tag_emoji}{task.title}{user_proj}{contact_info}{due} {status_icon}"
 
 
 def _format_task_with_subtasks(task: Task, session, indent: int = 0) -> list[str]:
@@ -172,15 +193,15 @@ def list_tasks(
     project: Optional[str] = None,
     include_subtasks: bool = True,
 ) -> str:
-    """List tasks, optionally filtered by status and/or project.
+    """List tasks, optionally filtered by status and/or tag.
 
     Args:
         status: Filter by status (todo/in_progress/done/cancelled). If not provided, lists all.
-        project: Filter by project name (Work/Personal/Health/Finance/Social/Learning).
+        project: Filter by tag name (Work/Personal/Health/Finance/Social/Learning).
         include_subtasks: If True, show subtasks nested under their parents. Default True.
 
     Returns:
-        Formatted list of tasks with IDs prefixed by # and project emoji.
+        Formatted list of tasks with IDs prefixed by # and tag emoji.
     """
     session = get_session()
 
@@ -223,7 +244,7 @@ def search_tasks_tool(query: str) -> str:
         query: Search query to match against task titles and descriptions.
 
     Returns:
-        List of matching tasks with IDs prefixed by # and project emoji.
+        List of matching tasks with IDs prefixed by # and tag emoji.
     """
     session = get_session()
     tasks = search_tasks(session, query)
@@ -234,10 +255,11 @@ def search_tasks_tool(query: str) -> str:
 
     lines = []
     for task in tasks:
-        project_emoji = task.project.emoji + " " if task.project else ""
+        tag_emoji = task.project.emoji + " " if task.project else ""
+        user_proj = f" [{task.user_project.name}]" if task.user_project else ""
         contact_info = f" → <u>{task.contact.name}</u>" if task.contact else ""
         parent_info = f" (subtask of #{task.parent_id})" if task.parent_id else ""
-        lines.append(f"#{task.id}: {project_emoji}{task.title}{contact_info} [{task.status.value}]{parent_info}")
+        lines.append(f"#{task.id}: {tag_emoji}{task.title}{user_proj}{contact_info} [{task.status.value}]{parent_info}")
 
     session.close()
     return "\n".join(lines)
@@ -269,7 +291,10 @@ def get_task_details(task_id: int) -> str:
     ]
 
     if task.project:
-        lines.append(f"Project: {task.project.emoji} {task.project.name}")
+        lines.append(f"Tag: {task.project.emoji} {task.project.name}")
+
+    if task.user_project:
+        lines.append(f"Project: {task.user_project.emoji} {task.user_project.name}")
 
     if task.contact:
         contact_info = f"Contact: <u>{task.contact.name}</u>"
@@ -328,6 +353,7 @@ def add_subtask(
     priority: Optional[str] = None,
     due_date: Optional[str] = None,
     project: Optional[str] = None,
+    user_project: Optional[str] = None,
 ) -> str:
     """Add a subtask to an existing task.
 
@@ -337,7 +363,8 @@ def add_subtask(
         description: Optional description.
         priority: Priority (low/medium/high/urgent). Defaults to medium.
         due_date: Due date (natural language like "tomorrow" or ISO format).
-        project: Project name. If not provided, inherits from parent task.
+        project: Tag name. If not provided, inherits from parent task.
+        user_project: User project name. If not provided, inherits from parent.
 
     Returns:
         Confirmation message with the created subtask ID.
@@ -360,6 +387,13 @@ def add_subtask(
         if proj:
             project_id = proj.id
 
+    # Resolve user_project - inherit from parent if not specified
+    user_project_id = parent.user_project_id  # inherit by default
+    if user_project:
+        up = get_user_project_by_name(session, user_project)
+        if up:
+            user_project_id = up.id
+
     task = create_task(
         session,
         title=title,
@@ -368,6 +402,7 @@ def add_subtask(
         due_date=due_dt,
         parent_id=parent_id,
         project_id=project_id,
+        user_project_id=user_project_id,
     )
     session.close()
 
@@ -422,18 +457,20 @@ def move_task(task_id: int, new_parent_id: Optional[int] = None) -> str:
         return f"Made task #{task_id} a root task (no parent)"
 
 
-def list_projects() -> str:
-    """List all available projects for task categorization.
+def list_tags() -> str:
+    """List all available tags (categories) for task categorization.
 
     Returns:
-        List of projects with their emojis.
+        List of tags with their emojis.
     """
     session = get_session()
     projects = db_list_projects(session)
     session.close()
 
     if not projects:
-        return "No projects found."
+        return "No tags found."
 
-    lines = [f"{p.emoji} {p.name}" for p in projects]
+    lines = ["<b>🏷️ Available Tags</b>", ""]
+    for p in projects:
+        lines.append(f"{p.emoji} {p.name}")
     return "\n".join(lines)

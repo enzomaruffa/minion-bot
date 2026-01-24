@@ -18,6 +18,7 @@ from .models import (
     TaskPriority,
     TaskStatus,
     Topic,
+    UserProject,
 )
 
 
@@ -63,6 +64,96 @@ def create_project(session: Session, name: str, emoji: str) -> Project:
     return project
 
 
+# UserProject CRUD (user-created projects)
+def create_user_project(
+    session: Session,
+    name: str,
+    description: Optional[str] = None,
+    emoji: str = "📁",
+    tag_id: Optional[int] = None,
+) -> UserProject:
+    """Create a new user project."""
+    project = UserProject(
+        name=name,
+        description=description,
+        emoji=emoji,
+        tag_id=tag_id,
+    )
+    session.add(project)
+    session.commit()
+    session.refresh(project)
+    return project
+
+
+def get_user_project(session: Session, project_id: int) -> Optional[UserProject]:
+    """Get a user project by ID."""
+    return session.get(UserProject, project_id)
+
+
+def get_user_project_by_name(session: Session, name: str) -> Optional[UserProject]:
+    """Get a user project by name (case-insensitive)."""
+    stmt = select(UserProject).where(UserProject.name.ilike(name)).where(UserProject.archived == False)
+    return session.scalars(stmt).first()
+
+
+def list_user_projects(session: Session, include_archived: bool = False) -> Sequence[UserProject]:
+    """List all user projects."""
+    stmt = select(UserProject).order_by(UserProject.name)
+    if not include_archived:
+        stmt = stmt.where(UserProject.archived == False)
+    return session.scalars(stmt).all()
+
+
+def update_user_project(
+    session: Session,
+    project_id: int,
+    name: Optional[str] = None,
+    description: Optional[str] = None,
+    emoji: Optional[str] = None,
+    tag_id: Optional[int] = None,
+    archived: Optional[bool] = None,
+) -> Optional[UserProject]:
+    """Update a user project."""
+    project = session.get(UserProject, project_id)
+    if not project:
+        return None
+
+    if name is not None:
+        project.name = name
+    if description is not None:
+        project.description = description
+    if emoji is not None:
+        project.emoji = emoji
+    if tag_id is not None:
+        project.tag_id = tag_id
+    if archived is not None:
+        project.archived = archived
+
+    session.commit()
+    session.refresh(project)
+    return project
+
+
+def delete_user_project(session: Session, project_id: int) -> bool:
+    """Delete a user project (sets archived=True, doesn't actually delete)."""
+    project = session.get(UserProject, project_id)
+    if not project:
+        return False
+    project.archived = True
+    session.commit()
+    return True
+
+
+def get_tasks_by_user_project(session: Session, project_id: int) -> Sequence[Task]:
+    """Get all tasks in a user project."""
+    stmt = (
+        select(Task)
+        .where(Task.user_project_id == project_id)
+        .order_by(Task.created_at.desc())
+    )
+    return session.scalars(stmt).all()
+
+
 # Task CRUD
 def create_task(
     session: Session,
@@ -72,6 +163,7 @@ def create_task(
     due_date: Optional[datetime] = None,
     parent_id: Optional[int] = None,
     project_id: Optional[int] = None,
+    user_project_id: Optional[int] = None,
     contact_id: Optional[int] = None,
 ) -> Task:
     task = Task(
@@ -81,6 +173,7 @@ def create_task(
         due_date=due_date,
         parent_id=parent_id,
         project_id=project_id,
+        user_project_id=user_project_id,
         contact_id=contact_id,
     )
     session.add(task)
@@ -103,9 +196,11 @@ def update_task(
     due_date: Optional[datetime] = None,
     parent_id: Optional[int] = None,
     project_id: Optional[int] = None,
+    user_project_id: Optional[int] = None,
     contact_id: Optional[int] = None,
     clear_parent: bool = False,
     clear_project: bool = False,
+    clear_user_project: bool = False,
     clear_contact: bool = False,
 ) -> Optional[Task]:
     task = session.get(Task, task_id)
@@ -126,12 +221,16 @@ def update_task(
         task.parent_id = parent_id
     if project_id is not None:
         task.project_id = project_id
+    if user_project_id is not None:
+        task.user_project_id = user_project_id
     if contact_id is not None:
         task.contact_id = contact_id
     if clear_parent:
         task.parent_id = None
     if clear_project:
         task.project_id = None
+    if clear_user_project:
+        task.user_project_id = None
     if clear_contact:
         task.contact_id = None
 

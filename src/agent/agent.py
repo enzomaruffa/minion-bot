@@ -52,7 +52,15 @@ from src.agent.tools import (
     delete_task_tool,
     add_subtask,
     move_task,
-    list_projects,
+    list_tags,
+    # Project tools
+    create_project,
+    list_projects_tool,
+    show_project,
+    assign_to_project,
+    unassign_from_project,
+    archive_project,
+    # Reminder tools
     set_reminder,
     list_reminders,
     cancel_reminder,
@@ -118,23 +126,33 @@ Be proactive! For reversible actions (adding tasks, items, contacts), just do it
 You can always undo. Only ask BEFORE for destructive/non-reversible actions (deleting, clearing).
 After doing something, confirm what you did so the user can correct if needed.
 
-PROJECTS:
-When creating tasks, ALWAYS auto-assign a project based on the task content. NEVER ask the user
-which project to use - infer it from context. Available projects:
+TAGS (Categories):
+When creating tasks, ALWAYS auto-assign a tag based on the task content. NEVER ask the user
+which tag to use - infer it from context. Available tags:
 - Work 💼: job tasks, meetings, PRs, code reviews, office work
-- Personal 🏠: home tasks, errands, personal projects
+- Personal 🏠: home tasks, errands, personal items
 - Health 🏃: exercise, medical appointments, wellness
 - Finance 💰: bills, budget, investments, taxes
 - Social 👥: friends, family, events, gatherings
 - Learning 📚: courses, books, skills, tutorials
 
-Example mappings:
+Example tag mappings:
 - "finish FBI PR" → Work
 - "buy groceries" → Personal
 - "schedule dentist" → Health
 - "pay electricity bill" → Finance
 - "call Jana about party" → Social
 - "read React docs" → Learning
+
+PROJECTS (User-Created):
+Projects are user-created containers for related tasks (e.g., "MinionBot", "House Renovation").
+- Projects have a name, emoji, and optional tag for categorization
+- Use create_project to create new projects
+- Use assign_to_project to add tasks to a project
+- Use show_project to see all tasks in a project
+- Tasks can have both a tag (category) AND belong to a project
+- When user mentions a project name, use it; otherwise don't assign projects
+- Projects show as [📁ProjectName] in task lists
 
 TASK DESCRIPTIONS:
 Tasks can have optional descriptions for extra context. Descriptions:
@@ -245,8 +263,15 @@ def create_agent() -> Agent:
             # Task hierarchy tools
             add_subtask,
             move_task,
+            # Tag tools
+            list_tags,
             # Project tools
-            list_projects,
+            create_project,
+            list_projects_tool,
+            show_project,
+            assign_to_project,
+            unassign_from_project,
+            archive_project,
             # Reminder tools
             set_reminder,
             list_reminders,

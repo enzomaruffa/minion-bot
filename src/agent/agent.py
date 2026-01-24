@@ -172,6 +172,10 @@ Gift items with recipients auto-link to contacts if they exist. Use show_gifts_f
 Quantities: Add "12 eggs" and it creates with target=12. Use purchase_item to track partial purchases
 (e.g., "bought 3 eggs" → purchase_item(id, 3)). Items auto-complete when purchased >= target.
 
+IMPORTANT - Item IDs: Item IDs are database IDs starting from 1, NOT list positions. IDs are shown as
+#1, #2, etc. in show_list output. NEVER guess IDs - if you need to check/remove/purchase an item and
+don't know its ID, call show_list FIRST to see actual IDs. There is no item #0.
+
 CONTACTS:
 Track birthdays with add_contact. You'll be reminded of upcoming birthdays at 5pm daily.
 Contacts support aliases (e.g., "Jana" is also "Janaina") - use these for nicknames/full names.

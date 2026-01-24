@@ -203,7 +203,7 @@ def check_item(item_id: int) -> str:
     """Mark a shopping item as checked (purchased/done).
 
     Args:
-        item_id: The ID of the item to check.
+        item_id: The database ID of the item (shown as #N in show_list). Must be >= 1.
 
     Returns:
         Confirmation message or error.
@@ -227,7 +227,7 @@ def purchase_item(item_id: int, quantity: int = 1) -> str:
     """Record purchasing some quantity of an item.
 
     Args:
-        item_id: The ID of the item.
+        item_id: The database ID of the item (shown as #N in show_list). Must be >= 1.
         quantity: How many purchased. Defaults to 1.
 
     Returns:
@@ -254,7 +254,7 @@ def uncheck_item(item_id: int) -> str:
     """Mark a shopping item as unchecked.
 
     Args:
-        item_id: The ID of the item to uncheck.
+        item_id: The database ID of the item (shown as #N in show_list). Must be >= 1.
 
     Returns:
         Confirmation message or error.
@@ -278,7 +278,8 @@ def remove_item(item_id: int) -> str:
     """Remove an item from a shopping list.
 
     Args:
-        item_id: The ID of the item to remove.
+        item_id: The database ID of the item (shown as #N in show_list). Must be >= 1.
+                 Call show_list first if you don't know the ID.
 
     Returns:
         Confirmation message or error.

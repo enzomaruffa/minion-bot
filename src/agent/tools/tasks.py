@@ -329,10 +329,10 @@ def get_task_details(task_id: int) -> str:
 
 
 def delete_task_tool(task_id: int) -> str:
-    """Delete a task.
+    """Delete a task. DESTRUCTIVE - call list_tasks first to verify the ID!
 
     Args:
-        task_id: The ID of the task to delete.
+        task_id: The ID of the task. MUST call list_tasks first to verify correct ID.
 
     Returns:
         Confirmation message or error if task not found.

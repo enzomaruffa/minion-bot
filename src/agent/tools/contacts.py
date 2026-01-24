@@ -170,10 +170,10 @@ def update_contact_tool(
 
 
 def remove_contact(contact_id: int) -> str:
-    """Remove a contact.
+    """Remove a contact. DESTRUCTIVE - call show_contacts first to verify the ID!
 
     Args:
-        contact_id: The ID of the contact to remove.
+        contact_id: The ID of the contact. MUST call show_contacts first to verify correct ID.
 
     Returns:
         Confirmation message or error.

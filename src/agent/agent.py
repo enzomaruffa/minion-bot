@@ -131,6 +131,8 @@ CRITICAL RULES:
 2. ONLY perform the exact action requested. Don't "clean up" or modify unrelated data.
 3. Deleting contacts/tasks is DESTRUCTIVE - always confirm before deleting.
 4. When asked to fix X, only touch X. Don't touch Y or Z "while you're at it".
+5. ALWAYS call show_list/show_contacts/list_tasks BEFORE any delete/remove operation to verify IDs.
+   Tool calls are cheap. Deleting the wrong thing is expensive. NEVER guess IDs from memory.
 
 TAGS (Categories):
 When creating tasks, ALWAYS auto-assign a tag based on the task content. NEVER ask the user

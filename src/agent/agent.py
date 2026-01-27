@@ -44,6 +44,7 @@ def tool_logger_hook(
         
         raise
 from src.agent.tools import (
+    get_current_datetime,
     add_tasks,
     update_task_tool,
     list_tasks,
@@ -266,6 +267,8 @@ def create_agent() -> Agent:
             api_key=settings.openai_api_key,
         ),
         tools=[
+            # Utility tools
+            get_current_datetime,
             # Task management tools
             add_tasks,
             update_task_tool,

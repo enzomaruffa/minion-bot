@@ -1,3 +1,17 @@
+from datetime import datetime
+from src.config import settings
+
+
+def get_current_datetime() -> str:
+    """Get the current date and time in the configured timezone.
+
+    Returns:
+        Current datetime formatted as a human-readable string.
+    """
+    now = datetime.now(settings.timezone)
+    return now.strftime("%A, %B %d, %Y at %H:%M:%S %Z")
+
+
 from .tasks import (
     add_tasks,
     update_task_tool,
@@ -50,6 +64,7 @@ from .contacts import (
 )
 
 __all__ = [
+    "get_current_datetime",
     "add_tasks",
     "update_task_tool",
     "list_tasks",

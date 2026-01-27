@@ -7,6 +7,7 @@ dependencies = [
     "agno>=2.4.2",
     "aiosqlite>=0.22.1",
     "apscheduler>=3.11.2",
+    "fastapi>=0.115.0",
     "google-api-python-client>=2.188.0",
     "google-auth-oauthlib>=1.2.4",
     "openai>=2.15.0",
@@ -14,6 +15,7 @@ dependencies = [
     "python-telegram-bot>=22.5",
     "sqlalchemy>=2.0.46",
     "dateparser>=1.2.0",
+    "uvicorn>=0.34.0",
 ]
 
 [build-system]

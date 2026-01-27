@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
@@ -8,8 +9,12 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
 from src.config import settings
-from src.db import get_session
-from src.db.queries import sync_calendar_event
+from src.db import get_session, session_scope
+from src.db.queries import (
+    get_user_calendar_token,
+    sync_calendar_event,
+    update_user_calendar_token_credentials,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +97,7 @@ def is_calendar_connected() -> bool:
     """Check if calendar is connected and credentials are valid."""
     if not settings.google_token_path.exists():
         return False
-    
+
     try:
         creds = Credentials.from_authorized_user_file(
             str(settings.google_token_path), SCOPES
@@ -100,6 +105,91 @@ def is_calendar_connected() -> bool:
         return creds and creds.valid
     except Exception:
         return False
+
+
+def is_calendar_connected_for_user(telegram_user_id: int) -> bool:
+    """Check if calendar is connected for a specific Telegram user."""
+    with session_scope() as session:
+        token = get_user_calendar_token(session, telegram_user_id)
+        if not token:
+            return False
+
+        # Check if we have credentials that can be used
+        # (either valid or can be refreshed)
+        return bool(token.access_token and (token.refresh_token or not _is_token_expired(token)))
+
+
+def _is_token_expired(token) -> bool:
+    """Check if a token is expired."""
+    if not token.expiry:
+        return False
+    return token.expiry < datetime.utcnow()
+
+
+def get_credentials_for_user(telegram_user_id: int) -> Optional[Credentials]:
+    """Get or refresh Google Calendar credentials for a specific user.
+
+    Args:
+        telegram_user_id: The Telegram user ID.
+
+    Returns:
+        Credentials object if available and valid/refreshable, None otherwise.
+    """
+    with session_scope() as session:
+        token = get_user_calendar_token(session, telegram_user_id)
+        if not token:
+            logger.debug(f"No token found for user {telegram_user_id}")
+            return None
+
+        # Parse scopes from JSON
+        try:
+            scopes = json.loads(token.scopes) if token.scopes else SCOPES
+        except json.JSONDecodeError:
+            scopes = SCOPES
+
+        # Create credentials object
+        creds = Credentials(
+            token=token.access_token,
+            refresh_token=token.refresh_token,
+            token_uri=token.token_uri,
+            client_id=token.client_id,
+            client_secret=token.client_secret,
+            scopes=scopes,
+            expiry=token.expiry,
+        )
+
+        # Refresh if expired
+        if creds.expired and creds.refresh_token:
+            try:
+                creds.refresh(Request())
+                # Save updated token
+                update_user_calendar_token_credentials(
+                    session,
+                    telegram_user_id,
+                    access_token=creds.token,
+                    expiry=creds.expiry,
+                )
+                logger.info(f"Refreshed token for user {telegram_user_id}")
+            except Exception as e:
+                logger.exception(f"Failed to refresh token for user {telegram_user_id}: {e}")
+                return None
+
+        return creds if creds.valid else None
+
+
+def get_service_for_user(telegram_user_id: int):
+    """Get Google Calendar service object for a specific user.
+
+    Args:
+        telegram_user_id: The Telegram user ID.
+
+    Returns:
+        Calendar service object if credentials available, None otherwise.
+    """
+    creds = get_credentials_for_user(telegram_user_id)
+    if not creds:
+        return None
+    return build("calendar", "v3", credentials=creds)
 
 
 def get_credentials(headless: bool = False) -> Optional[Credentials]:

@@ -2,13 +2,17 @@ from typing import Optional
 
 from src.db import session_scope
 from src.db.queries import (
+    bulk_update_tasks_project,
     create_user_project,
     get_project_by_name,
+    get_user_project,
     get_user_project_by_name,
     list_user_projects as db_list_user_projects,
     get_tasks_by_user_project,
     delete_user_project,
+    move_all_tasks_between_projects,
     update_task,
+    update_user_project,
 )
 
 
@@ -54,17 +58,31 @@ def create_project(
         return f"Created project {emoji} {name}{tag_info}"
 
 
-def list_projects_tool(include_archived: bool = False) -> str:
-    """List all user-created projects.
+def list_projects_tool(
+    include_archived: bool = False,
+    has_todo: bool | None = None,
+    has_done: bool | None = None,
+    is_empty: bool | None = None,
+) -> str:
+    """List all user-created projects with optional filters.
 
     Args:
         include_archived: If True, also show archived projects.
+        has_todo: If True, only projects with pending tasks. If False, only without.
+        has_done: If True, only projects with completed tasks. If False, only without.
+        is_empty: If True, only empty projects. If False, only non-empty.
 
     Returns:
         List of projects with task counts.
     """
     with session_scope() as session:
-        projects = db_list_user_projects(session, include_archived=include_archived)
+        projects = db_list_user_projects(
+            session,
+            include_archived=include_archived,
+            has_todo=has_todo,
+            has_done=has_done,
+            is_empty=is_empty,
+        )
 
         if not projects:
             return "No projects yet. Create one with create_project."
@@ -215,3 +233,120 @@ def archive_project(project_name: str) -> str:
         delete_user_project(session, project.id)
 
         return f"Archived project {project.emoji} {project.name}"
+
+
+def assign_tasks_to_project(task_ids: list[int], project_name: str) -> str:
+    """Assign multiple tasks to a project at once.
+
+    Args:
+        task_ids: List of task IDs to assign.
+        project_name: Name of the project to assign to.
+
+    Returns:
+        Confirmation message with count of assigned tasks.
+    """
+    with session_scope() as session:
+        project = get_user_project_by_name(session, project_name)
+
+        if not project:
+            return f"Project '{project_name}' not found."
+
+        updated = bulk_update_tasks_project(session, task_ids, project.id)
+
+        if not updated:
+            return "No tasks were updated (IDs not found)."
+
+        not_found = set(task_ids) - set(updated)
+        msg = f"Assigned {len(updated)} tasks to {project.emoji} {project.name}"
+        if not_found:
+            msg += f" (IDs not found: {sorted(not_found)})"
+        return msg
+
+
+def move_project_tasks(from_project: str, to_project: str) -> str:
+    """Move all tasks from one project to another.
+
+    Args:
+        from_project: Name of the source project.
+        to_project: Name of the destination project.
+
+    Returns:
+        Confirmation message with count of moved tasks.
+    """
+    with session_scope() as session:
+        src = get_user_project_by_name(session, from_project)
+        if not src:
+            return f"Source project '{from_project}' not found."
+
+        dst = get_user_project_by_name(session, to_project)
+        if not dst:
+            return f"Destination project '{to_project}' not found."
+
+        count = move_all_tasks_between_projects(session, src.id, dst.id)
+
+        if count == 0:
+            return f"No tasks to move from {src.emoji} {src.name}"
+
+        return f"Moved {count} tasks from {src.emoji} {src.name} to {dst.emoji} {dst.name}"
+
+
+def update_project(
+    project_name: str,
+    new_name: str | None = None,
+    new_emoji: str | None = None,
+    new_description: str | None = None,
+    archived: bool | None = None,
+) -> str:
+    """Update project fields. Only provided fields are changed.
+
+    Args:
+        project_name: Name of the project to update.
+        new_name: New name for the project.
+        new_emoji: New emoji for the project.
+        new_description: New description for the project.
+        archived: Set to True to archive, False to unarchive.
+
+    Returns:
+        Confirmation message.
+    """
+    with session_scope() as session:
+        project = get_user_project_by_name(session, project_name)
+
+        # If not found by name (maybe archived), try looking up archived ones
+        if not project and archived is False:
+            from sqlalchemy import select
+            from src.db.models import UserProject
+            stmt = select(UserProject).where(
+                UserProject.name.ilike(project_name),
+                UserProject.archived == True
+            )
+            project = session.scalars(stmt).first()
+
+        if not project:
+            return f"Project '{project_name}' not found."
+
+        updated = update_user_project(
+            session,
+            project.id,
+            name=new_name,
+            description=new_description,
+            emoji=new_emoji,
+            archived=archived,
+        )
+
+        if not updated:
+            return "Failed to update project."
+
+        changes = []
+        if new_name:
+            changes.append(f"name -> {new_name}")
+        if new_emoji:
+            changes.append(f"emoji -> {new_emoji}")
+        if new_description:
+            changes.append(f"description updated")
+        if archived is True:
+            changes.append("archived")
+        if archived is False:
+            changes.append("unarchived")
+
+        return f"Updated {updated.emoji} {updated.name}: {', '.join(changes)}"

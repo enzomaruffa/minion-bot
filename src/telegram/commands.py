@@ -15,7 +15,12 @@ from src.db.queries import (
     list_shopping_items,
     list_upcoming_birthdays,
 )
-from src.integrations.calendar import get_auth_url, complete_auth, is_calendar_connected
+from src.integrations.calendar import (
+    get_auth_url,
+    complete_auth,
+    is_calendar_connected,
+    is_calendar_connected_for_user,
+)
 
 # Track if we're waiting for an auth code
 _awaiting_auth_code = False
@@ -112,9 +117,7 @@ async def calendar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 
 async def auth_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle /auth command - connect Google Calendar."""
-    global _awaiting_auth_code
-    
+    """Handle /auth command - connect Google Calendar via web OAuth."""
     if not update.message:
         return
 
@@ -123,31 +126,18 @@ async def auth_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text("Not authorized.")
         return
 
-    # Check if already connected
-    if is_calendar_connected():
+    # Check if already connected (either file-based or DB-based)
+    if is_calendar_connected() or is_calendar_connected_for_user(user_id):
         await update.message.reply_text("Google Calendar is already connected!")
         return
 
-    # Get auth URL
-    auth_url = get_auth_url()
-    if not auth_url:
-        await update.message.reply_text(
-            "Cannot start auth: credentials.json not found.\n"
-            "Upload it to credentials/credentials.json first."
-        )
-        return
+    # Generate web OAuth URL
+    auth_url = f"{settings.web_base_url}/auth/start/{user_id}"
 
-    _awaiting_auth_code = True
     await update.message.reply_text(
         "Google Calendar Authorization\n\n"
-        f"1. Open this URL: {auth_url}\n\n"
-        "2. Sign in with your Google account and allow access\n\n"
-        "3. You'll see a page that won't load - this is expected!\n\n"
-        "4. Find 'code=' in the URL and copy everything after it until the '&'\n"
-        "   Example URL: localhost/?code=4/0AeanS0r...&scope=...\n"
-        "   Copy: 4/0AeanS0r... (the part between 'code=' and '&')\n\n"
-        "5. Send that code back to me here\n\n"
-        "Waiting for your code...",
+        f"Click this link to connect:\n{auth_url}\n\n"
+        "After signing in, you'll see a success page and can close it.",
     )
 
 

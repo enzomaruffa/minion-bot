@@ -17,6 +17,10 @@ class Settings:
     google_token_path: Path
     database_path: Path
     timezone: ZoneInfo
+    # Web server settings for OAuth
+    web_host: str
+    web_port: int
+    web_base_url: str
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -43,6 +47,13 @@ class Settings:
         tz_name = os.environ.get("TIMEZONE", "America/Sao_Paulo")
         timezone = ZoneInfo(tz_name)
 
+        # Web server settings
+        web_host = os.environ.get("WEB_HOST", "0.0.0.0")
+        web_port = int(os.environ.get("WEB_PORT", "21125"))
+        web_base_url = os.environ.get(
+            "WEB_BASE_URL", "https://googleauth.minion.enzomaruffa.dev"
+        )
+
         return cls(
             telegram_bot_token=telegram_bot_token,
             telegram_user_id=int(telegram_user_id),
@@ -51,6 +62,9 @@ class Settings:
             google_token_path=google_token_path,
             database_path=database_path,
             timezone=timezone,
+            web_host=web_host,
+            web_port=web_port,
+            web_base_url=web_base_url,
         )
 
 

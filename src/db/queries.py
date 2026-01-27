@@ -19,6 +19,7 @@ from .models import (
     TaskPriority,
     TaskStatus,
     Topic,
+    UserCalendarToken,
     UserProject,
 )
 
@@ -125,11 +126,61 @@ def get_user_project_by_name(session: Session, name: str) -> Optional[UserProjec
     return session.scalars(stmt).first()
 
 
-def list_user_projects(session: Session, include_archived: bool = False) -> Sequence[UserProject]:
-    """List all user projects."""
+def list_user_projects(
+    session: Session,
+    include_archived: bool = False,
+    has_todo: bool | None = None,
+    has_done: bool | None = None,
+    is_empty: bool | None = None,
+) -> Sequence[UserProject]:
+    """List user projects with optional filters.
+
+    Args:
+        include_archived: Include archived projects.
+        has_todo: Filter to projects with pending tasks (todo/in_progress).
+        has_done: Filter to projects with completed tasks.
+        is_empty: Filter to projects with no tasks.
+    """
+    from sqlalchemy import exists, and_
+
     stmt = select(UserProject).order_by(UserProject.name)
     if not include_archived:
         stmt = stmt.where(UserProject.archived == False)
+
+    # Filter by pending tasks
+    if has_todo is not None:
+        pending_exists = exists().where(
+            and_(
+                Task.user_project_id == UserProject.id,
+                Task.status.in_([TaskStatus.TODO, TaskStatus.IN_PROGRESS])
+            )
+        )
+        if has_todo:
+            stmt = stmt.where(pending_exists)
+        else:
+            stmt = stmt.where(~pending_exists)
+
+    # Filter by completed tasks
+    if has_done is not None:
+        done_exists = exists().where(
+            and_(
+                Task.user_project_id == UserProject.id,
+                Task.status == TaskStatus.DONE
+            )
+        )
+        if has_done:
+            stmt = stmt.where(done_exists)
+        else:
+            stmt = stmt.where(~done_exists)
+
+    # Filter by empty (no tasks at all)
+    if is_empty is not None:
+        task_exists = exists().where(Task.user_project_id == UserProject.id)
+        if is_empty:
+            stmt = stmt.where(~task_exists)
+        else:
+            stmt = stmt.where(task_exists)
+
     return session.scalars(stmt).all()
 
 
@@ -181,6 +232,54 @@ def get_tasks_by_user_project(session: Session, project_id: int) -> Sequence[Tas
         .order_by(Task.created_at.desc())
     )
     return session.scalars(stmt).all()
+
+
+def bulk_update_tasks_project(
+    session: Session, task_ids: list[int], user_project_id: int | None
+) -> list[int]:
+    """Bulk update user_project_id for multiple tasks.
+
+    Args:
+        session: Database session.
+        task_ids: List of task IDs to update.
+        user_project_id: Target project ID (or None to unassign).
+
+    Returns:
+        List of task IDs that were successfully updated.
+    """
+    updated_ids = []
+    for task_id in task_ids:
+        task = session.get(Task, task_id)
+        if task:
+            task.user_project_id = user_project_id
+            updated_ids.append(task_id)
+    session.commit()
+    return updated_ids
+
+
+def move_all_tasks_between_projects(
+    session: Session, from_project_id: int, to_project_id: int
+) -> int:
+    """Move all tasks from one project to another.
+
+    Args:
+        session: Database session.
+        from_project_id: Source project ID.
+        to_project_id: Destination project ID.
+
+    Returns:
+        Number of tasks moved.
+    """
+    from sqlalchemy import update
+
+    stmt = (
+        update(Task)
+        .where(Task.user_project_id == from_project_id)
+        .values(user_project_id=to_project_id)
+    )
+    result = session.execute(stmt)
+    session.commit()
+    return result.rowcount
 
 
 # Task CRUD
@@ -779,3 +878,85 @@ def get_gifts_by_contact(session: Session, contact_id: int) -> Sequence[Shopping
         .order_by(ShoppingItem.created_at.desc())
     )
     return session.scalars(stmt).all()
+
+
+# UserCalendarToken CRUD
+def get_user_calendar_token(
+    session: Session, telegram_user_id: int
+) -> Optional[UserCalendarToken]:
+    """Get calendar token for a Telegram user."""
+    stmt = select(UserCalendarToken).where(
+        UserCalendarToken.telegram_user_id == telegram_user_id
+    )
+    return session.scalars(stmt).first()
+
+
+def save_user_calendar_token(
+    session: Session,
+    telegram_user_id: int,
+    access_token: str,
+    refresh_token: Optional[str],
+    token_uri: str,
+    client_id: str,
+    client_secret: str,
+    scopes: list[str],
+    expiry: Optional[datetime] = None,
+) -> UserCalendarToken:
+    """Save or update calendar token for a Telegram user."""
+    import json
+
+    existing = get_user_calendar_token(session, telegram_user_id)
+
+    if existing:
+        existing.access_token = access_token
+        existing.refresh_token = refresh_token
+        existing.token_uri = token_uri
+        existing.client_id = client_id
+        existing.client_secret = client_secret
+        existing.scopes = json.dumps(scopes)
+        existing.expiry = expiry
+        session.commit()
+        session.refresh(existing)
+        return existing
+
+    token = UserCalendarToken(
+        telegram_user_id=telegram_user_id,
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_uri=token_uri,
+        client_id=client_id,
+        client_secret=client_secret,
+        scopes=json.dumps(scopes),
+        expiry=expiry,
+    )
+    session.add(token)
+    session.commit()
+    session.refresh(token)
+    return token
+
+
+def delete_user_calendar_token(session: Session, telegram_user_id: int) -> bool:
+    """Delete calendar token for a Telegram user."""
+    token = get_user_calendar_token(session, telegram_user_id)
+    if not token:
+        return False
+    session.delete(token)
+    session.commit()
+    return True
+
+
+def update_user_calendar_token_credentials(
+    session: Session,
+    telegram_user_id: int,
+    access_token: str,
+    expiry: Optional[datetime] = None,
+) -> bool:
+    """Update just the access token and expiry after a refresh."""
+    token = get_user_calendar_token(session, telegram_user_id)
+    if not token:
+        return False
+    token.access_token = access_token
+    if expiry:
+        token.expiry = expiry
+    session.commit()
+    return True

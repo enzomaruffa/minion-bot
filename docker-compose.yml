@@ -1,6 +1,8 @@
 services:
   minion:
     build: .
+    ports:
+      - "21125:21125"
     volumes:
       - ./data:/app/data
       - ./credentials:/app/credentials

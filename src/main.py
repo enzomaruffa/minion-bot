@@ -1,4 +1,5 @@
 import logging
+import threading
 
 from src.config import settings
 from src.db import init_database
@@ -12,6 +13,7 @@ logging.basicConfig(
 )
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("apscheduler.executors").setLevel(logging.WARNING)
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
@@ -45,6 +47,15 @@ async def post_shutdown(application) -> None:
     shutdown_scheduler()
 
 
+def start_web_server() -> None:
+    """Start the OAuth web server in a daemon thread."""
+    from src.web.server import run_server
+
+    thread = threading.Thread(target=run_server, daemon=True)
+    thread.start()
+    logger.info(f"Web server started on {settings.web_host}:{settings.web_port}")
+
+
 def main() -> None:
     """Start the bot."""
     logger.info("Initializing database...")
@@ -52,6 +63,9 @@ def main() -> None:
 
     logger.info("Registering scheduled jobs...")
     register_jobs()
+
+    logger.info("Starting OAuth web server...")
+    start_web_server()
 
     logger.info("Starting Minion bot...")
     application = create_application()

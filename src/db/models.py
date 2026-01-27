@@ -186,6 +186,25 @@ class ShoppingItem(Base):
         return self.checked or self.quantity_purchased >= self.quantity_target
 
 
+class UserCalendarToken(Base):
+    """Stores Google Calendar OAuth tokens per Telegram user."""
+    __tablename__ = "user_calendar_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    telegram_user_id: Mapped[int] = mapped_column(unique=True, index=True)
+    access_token: Mapped[str] = mapped_column(Text)
+    refresh_token: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    token_uri: Mapped[str] = mapped_column(String(255))
+    client_id: Mapped[str] = mapped_column(String(255))
+    client_secret: Mapped[str] = mapped_column(String(255))
+    scopes: Mapped[str] = mapped_column(Text)  # JSON list
+    expiry: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
 def init_db(database_url: str) -> None:
     engine = create_engine(database_url)
     Base.metadata.create_all(engine)

@@ -184,6 +184,7 @@ async def register_commands(application: Application) -> None:
         BotCommand("wishlist", "Wishlist"),
         BotCommand("contacts", "All contacts"),
         BotCommand("birthdays", "Upcoming birthdays"),
+        BotCommand("auth", "Connect Google Calendar"),
         BotCommand("help", "Show help"),
     ]
     await application.bot.set_my_commands(commands)

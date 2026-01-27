@@ -47,6 +47,8 @@ from src.agent.tools import (
     get_current_datetime,
     add_tasks,
     update_task_tool,
+    complete_task,
+    get_overdue_tasks,
     list_tasks,
     search_tasks_tool,
     get_task_details,
@@ -61,6 +63,9 @@ from src.agent.tools import (
     assign_to_project,
     unassign_from_project,
     archive_project,
+    assign_tasks_to_project,
+    move_project_tasks,
+    update_project,
     # Reminder tools
     set_reminder,
     list_reminders,
@@ -272,6 +277,8 @@ def create_agent() -> Agent:
             # Task management tools
             add_tasks,
             update_task_tool,
+            complete_task,
+            get_overdue_tasks,
             list_tasks,
             search_tasks_tool,
             get_task_details,
@@ -288,6 +295,9 @@ def create_agent() -> Agent:
             assign_to_project,
             unassign_from_project,
             archive_project,
+            assign_tasks_to_project,
+            move_project_tasks,
+            update_project,
             # Reminder tools
             set_reminder,
             list_reminders,

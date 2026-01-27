@@ -26,6 +26,8 @@ from src.telegram.commands import (
     gifts_command,
     wishlist_command,
     lists_command,
+    projects_command,
+    reminders_command,
     get_last_command_context,
     clear_command_context,
 )
@@ -177,6 +179,8 @@ async def register_commands(application: Application) -> None:
     commands = [
         BotCommand("tasks", "Pending tasks"),
         BotCommand("today", "Today's agenda"),
+        BotCommand("projects", "All projects"),
+        BotCommand("reminders", "Pending reminders"),
         BotCommand("calendar", "Upcoming events"),
         BotCommand("lists", "All shopping lists"),
         BotCommand("groceries", "Grocery list"),
@@ -207,6 +211,9 @@ def create_application() -> Application:
     application.add_handler(CommandHandler("groceries", groceries_command))
     application.add_handler(CommandHandler("gifts", gifts_command))
     application.add_handler(CommandHandler("wishlist", wishlist_command))
+    # Project and reminder commands
+    application.add_handler(CommandHandler("projects", projects_command))
+    application.add_handler(CommandHandler("reminders", reminders_command))
     # Contact commands
     application.add_handler(CommandHandler("contacts", contacts_command))
     application.add_handler(CommandHandler("birthdays", birthdays_command))

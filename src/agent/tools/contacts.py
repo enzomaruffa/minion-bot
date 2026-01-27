@@ -8,6 +8,7 @@ from src.db.queries import (
     create_contact,
     delete_contact,
     get_contact,
+    get_task_counts_by_contacts,
     get_tasks_by_contact,
     list_contacts as db_list_contacts,
     list_upcoming_birthdays,
@@ -62,11 +63,13 @@ def show_contacts() -> str:
         if not contacts:
             return "No contacts saved. Try 'add contact John' to get started!"
 
+        # Batch load task counts to avoid N+1 queries
+        contact_ids = [c.id for c in contacts]
+        task_counts = get_task_counts_by_contacts(session, contact_ids)
+
         lines = ["Contacts"]
         for contact in contacts:
-            # Count linked tasks
-            tasks = get_tasks_by_contact(session, contact.id)
-            task_count = len(tasks)
+            task_count = task_counts.get(contact.id, 0)
 
             alias_info = f" (aka {contact.aliases})" if contact.aliases else ""
             bday_info = f" {contact.birthday.strftime('%B %d')}" if contact.birthday else ""

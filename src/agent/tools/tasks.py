@@ -144,6 +144,46 @@ def update_task_tool(
         return f"Updated `#{task_id}` _{task.title}_"
 
 
+def complete_task(task_id: int) -> str:
+    """Mark a task as done (shorthand for updating status to done).
+
+    Args:
+        task_id: The ID of the task to complete.
+
+    Returns:
+        Confirmation message or error if task not found.
+    """
+    with session_scope() as session:
+        task = update_task(session, task_id, status=TaskStatus.DONE)
+
+        if not task:
+            return f"Task `#{task_id}` not found"
+
+        return f"✓ Completed `#{task_id}` _{task.title}_"
+
+
+def get_overdue_tasks() -> str:
+    """Get all tasks that are past their due date.
+
+    Returns:
+        Formatted list of overdue tasks or message if none.
+    """
+    from src.db.queries import list_overdue_tasks
+
+    with session_scope() as session:
+        now = datetime.now(settings.timezone).replace(tzinfo=None)
+        tasks = list_overdue_tasks(session, now)
+
+        if not tasks:
+            return "No overdue tasks! 🎉"
+
+        lines = ["<b>⚠️ Overdue Tasks</b>"]
+        for task in tasks:
+            lines.append(_format_task_line(task))
+
+        return "\n".join(lines)
+
+
 def _format_task_line(task: Task, indent: int = 0) -> str:
     """Format a single task line with optional indentation."""
     prefix = "  " if indent > 0 else ""

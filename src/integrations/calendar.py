@@ -233,22 +233,23 @@ def get_credentials(headless: bool = False) -> Optional[Credentials]:
     return creds
 
 
-def fetch_events(start: datetime, end: datetime) -> list[dict]:
+def fetch_events(
+    start: datetime, end: datetime, telegram_user_id: int | None = None
+) -> list[dict]:
     """Fetch calendar events from Google Calendar.
 
     Args:
         start: Start of time range.
         end: End of time range.
+        telegram_user_id: Optional user ID for per-user auth.
 
     Returns:
         List of event dictionaries. Empty list on error.
     """
     try:
-        creds = get_credentials()
-        if not creds:
+        service = _get_service_with_fallback(telegram_user_id)
+        if not service:
             return []
-
-        service = build("calendar", "v3", credentials=creds)
 
         events_result = (
             service.events()
@@ -312,27 +313,51 @@ def sync_events(start: datetime, end: datetime) -> int:
 
 
 def get_service():
-    """Get Google Calendar service object."""
+    """Get Google Calendar service object (file-based auth)."""
     creds = get_credentials()
     if not creds:
         return None
     return build("calendar", "v3", credentials=creds)
 
 
-def test_connection() -> dict:
+def _get_service_with_fallback(telegram_user_id: int | None = None):
+    """Get Calendar service, preferring per-user DB auth with file-based fallback.
+
+    Args:
+        telegram_user_id: Optional user ID for per-user auth.
+
+    Returns:
+        Calendar service object or None.
+    """
+    # Try per-user auth first if user_id provided
+    if telegram_user_id:
+        service = get_service_for_user(telegram_user_id)
+        if service:
+            logger.debug(f"Using per-user auth for user {telegram_user_id}")
+            return service
+        logger.debug(f"No DB token for user {telegram_user_id}, falling back to file-based")
+
+    # Fall back to file-based auth
+    return get_service()
+
+
+def test_connection(telegram_user_id: int | None = None) -> dict:
     """Test the calendar connection.
-    
+
+    Args:
+        telegram_user_id: Optional user ID for per-user auth.
+
     Returns:
         Dict with status and calendar info, or error message.
     """
     try:
-        service = get_service()
+        service = _get_service_with_fallback(telegram_user_id)
         if not service:
             return {"ok": False, "error": "Not authenticated. Use /auth to connect."}
-        
+
         # Try to get calendar info
         calendar = service.calendars().get(calendarId="primary").execute()
-        
+
         return {
             "ok": True,
             "calendar_name": calendar.get("summary", "Primary"),
@@ -349,6 +374,7 @@ def create_event(
     end: datetime,
     description: Optional[str] = None,
     location: Optional[str] = None,
+    telegram_user_id: int | None = None,
 ) -> Optional[dict]:
     """Create a new calendar event.
 
@@ -358,11 +384,12 @@ def create_event(
         end: Event end time.
         description: Optional event description.
         location: Optional event location.
+        telegram_user_id: Optional user ID for per-user auth.
 
     Returns:
         Event dict with id and htmlLink if successful, None otherwise.
     """
-    service = get_service()
+    service = _get_service_with_fallback(telegram_user_id)
     if not service:
         return None
 
@@ -388,6 +415,7 @@ def update_event(
     end: Optional[datetime] = None,
     description: Optional[str] = None,
     location: Optional[str] = None,
+    telegram_user_id: int | None = None,
 ) -> Optional[dict]:
     """Update an existing calendar event.
 
@@ -398,11 +426,12 @@ def update_event(
         end: New end time (optional).
         description: New description (optional).
         location: New location (optional).
+        telegram_user_id: Optional user ID for per-user auth.
 
     Returns:
         Updated event dict if successful, None otherwise.
     """
-    service = get_service()
+    service = _get_service_with_fallback(telegram_user_id)
     if not service:
         return None
 
@@ -429,16 +458,17 @@ def update_event(
         return None
 
 
-def delete_event(event_id: str) -> bool:
+def delete_event(event_id: str, telegram_user_id: int | None = None) -> bool:
     """Delete a calendar event.
 
     Args:
         event_id: Google event ID.
+        telegram_user_id: Optional user ID for per-user auth.
 
     Returns:
         True if successful, False otherwise.
     """
-    service = get_service()
+    service = _get_service_with_fallback(telegram_user_id)
     if not service:
         return False
 
@@ -450,16 +480,17 @@ def delete_event(event_id: str) -> bool:
         return False
 
 
-def get_event(event_id: str) -> Optional[dict]:
+def get_event(event_id: str, telegram_user_id: int | None = None) -> Optional[dict]:
     """Get a single calendar event by ID.
 
     Args:
         event_id: Google event ID.
+        telegram_user_id: Optional user ID for per-user auth.
 
     Returns:
         Event dict if found, None otherwise.
     """
-    service = get_service()
+    service = _get_service_with_fallback(telegram_user_id)
     if not service:
         return None
 
@@ -471,17 +502,20 @@ def get_event(event_id: str) -> Optional[dict]:
         return None
 
 
-def list_upcoming_events(days: int = 7, max_results: int = 20) -> list[dict]:
+def list_upcoming_events(
+    days: int = 7, max_results: int = 20, telegram_user_id: int | None = None
+) -> list[dict]:
     """List upcoming calendar events.
 
     Args:
         days: Number of days to look ahead.
         max_results: Maximum number of events to return.
+        telegram_user_id: Optional user ID for per-user auth.
 
     Returns:
         List of event dictionaries.
     """
-    service = get_service()
+    service = _get_service_with_fallback(telegram_user_id)
     if not service:
         return []
 

@@ -15,6 +15,8 @@ def get_current_datetime() -> str:
 from .tasks import (
     add_tasks,
     update_task_tool,
+    complete_task,
+    get_overdue_tasks,
     list_tasks,
     search_tasks_tool,
     get_task_details,
@@ -30,6 +32,9 @@ from .projects import (
     assign_to_project,
     unassign_from_project,
     archive_project,
+    assign_tasks_to_project,
+    move_project_tasks,
+    update_project,
 )
 from .reminders import (
     set_reminder,
@@ -67,6 +72,8 @@ __all__ = [
     "get_current_datetime",
     "add_tasks",
     "update_task_tool",
+    "complete_task",
+    "get_overdue_tasks",
     "list_tasks",
     "search_tasks_tool",
     "get_task_details",
@@ -81,6 +88,9 @@ __all__ = [
     "assign_to_project",
     "unassign_from_project",
     "archive_project",
+    "assign_tasks_to_project",
+    "move_project_tasks",
+    "update_project",
     "set_reminder",
     "list_reminders",
     "cancel_reminder",

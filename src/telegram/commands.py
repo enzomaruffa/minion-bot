@@ -5,7 +5,7 @@ from typing import Callable
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from src.agent.tools import get_agenda, list_tasks
+from src.agent.tools import get_agenda, list_tasks, list_projects_tool, list_reminders
 from src.config import settings
 from src.db import session_scope
 from src.db.models import ShoppingListType
@@ -337,6 +337,22 @@ async def lists_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 @require_auth
+async def projects_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /projects command - show all user projects."""
+    output = list_projects_tool()
+    _store_command_context("/projects", output)
+    await update.message.reply_text(output)
+
+
+@require_auth
+async def reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /reminders command - show pending reminders."""
+    output = list_reminders()
+    _store_command_context("/reminders", output)
+    await update.message.reply_text(output)
+
+
+@require_auth
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /help command - show available commands."""
     calendar_status = "connected" if is_calendar_connected() else "not connected (/auth)"
@@ -346,6 +362,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 Tasks & Agenda
 /tasks - pending tasks
 /today - today's agenda
+/projects - all projects
+/reminders - pending reminders
 /calendar - upcoming events
 
 Shopping Lists

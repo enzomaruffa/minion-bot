@@ -766,22 +766,30 @@ def get_contact(session: Session, contact_id: int) -> Optional[Contact]:
 
 
 def get_contact_by_name(session: Session, name: str) -> Optional[Contact]:
-    """Get a contact by name or alias (case-insensitive)."""
-    # First try exact name match
+    """Get a contact by name or alias (case-insensitive).
+
+    Uses SQL LIKE for efficient alias searching instead of loading all contacts.
+    """
+    from sqlalchemy import or_, func
+
+    # Try exact name match first
     stmt = select(Contact).where(Contact.name.ilike(name))
     contact = session.scalars(stmt).first()
     if contact:
         return contact
 
-    # Search in aliases (comma-separated)
-    contacts = list_contacts(session)
-    name_lower = name.lower()
-    for contact in contacts:
-        if contact.aliases:
-            aliases = [a.strip().lower() for a in contact.aliases.split(",")]
-            if name_lower in aliases:
-                return contact
-    return None
+    # Search in aliases using SQL LIKE (aliases are comma-separated)
+    # Match patterns: "name", "name, ...", "..., name", "..., name, ..."
+    name_pattern = name.lower()
+    stmt = select(Contact).where(
+        or_(
+            func.lower(Contact.aliases) == name_pattern,
+            func.lower(Contact.aliases).like(f"{name_pattern},%"),
+            func.lower(Contact.aliases).like(f"%, {name_pattern}"),
+            func.lower(Contact.aliases).like(f"%, {name_pattern},%"),
+        )
+    )
+    return session.scalars(stmt).first()
 
 
 def list_contacts(session: Session) -> Sequence[Contact]:
@@ -868,6 +876,30 @@ def get_tasks_by_contact(session: Session, contact_id: int) -> Sequence[Task]:
         .order_by(Task.created_at.desc())
     )
     return session.scalars(stmt).all()
+
+
+def get_task_counts_by_contacts(session: Session, contact_ids: list[int]) -> dict[int, int]:
+    """Get task counts for multiple contacts in a single query.
+
+    Args:
+        session: Database session.
+        contact_ids: List of contact IDs.
+
+    Returns:
+        Dict mapping contact_id -> task count.
+    """
+    if not contact_ids:
+        return {}
+
+    from sqlalchemy import func
+
+    stmt = (
+        select(Task.contact_id, func.count(Task.id))
+        .where(Task.contact_id.in_(contact_ids))
+        .group_by(Task.contact_id)
+    )
+    results = session.execute(stmt).all()
+    return {contact_id: count for contact_id, count in results}
 
 
 def get_gifts_by_contact(session: Session, contact_id: int) -> Sequence[ShoppingItem]:

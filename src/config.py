@@ -51,7 +51,7 @@ class Settings:
         web_host = os.environ.get("WEB_HOST", "0.0.0.0")
         web_port = int(os.environ.get("WEB_PORT", "21125"))
         web_base_url = os.environ.get(
-            "WEB_BASE_URL", "https://googleauth.minion.enzomaruffa.dev"
+            "WEB_BASE_URL", "https://miniongoogleauth.enzomaruffa.dev"
         )
 
         return cls(

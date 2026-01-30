@@ -67,6 +67,14 @@ from .contacts import (
     remove_contact,
     get_contact_tasks,
 )
+from .notes import (
+    browse_notes,
+    read_note_tool,
+    create_note_tool,
+    update_note_tool,
+    append_to_note_tool,
+    search_notes_tool,
+)
 
 __all__ = [
     "get_current_datetime",
@@ -116,4 +124,11 @@ __all__ = [
     "update_contact_tool",
     "remove_contact",
     "get_contact_tasks",
+    # Notes tools
+    "browse_notes",
+    "read_note_tool",
+    "create_note_tool",
+    "update_note_tool",
+    "append_to_note_tool",
+    "search_notes_tool",
 ]

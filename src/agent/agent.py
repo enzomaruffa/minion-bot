@@ -92,6 +92,13 @@ from src.agent.tools import (
     update_contact_tool,
     remove_contact,
     get_contact_tasks,
+    # Notes tools
+    browse_notes,
+    read_note_tool,
+    create_note_tool,
+    update_note_tool,
+    append_to_note_tool,
+    search_notes_tool,
 )
 
 SYSTEM_PROMPT = """You are Minion, a personal assistant bot running on Telegram.
@@ -126,6 +133,7 @@ Your capabilities:
 - Agenda: show combined view of tasks, events, and reminders
 - Shopping lists: manage gifts, groceries, and wishlist items
 - Contacts: track people and their birthdays
+- Notes: browse, read, create, update, and search Silverbullet notes
 
 BEHAVIOR:
 Be proactive! For reversible actions (adding tasks, items, contacts), just do it - don't ask permission.
@@ -196,6 +204,16 @@ Track birthdays with add_contact. You'll be reminded of upcoming birthdays at 5p
 Contacts support aliases (e.g., "Jana" is also "Janaina") - use these for nicknames/full names.
 When creating tasks about a person (e.g., "call Jana"), link to their contact if they exist.
 Just create contacts when user mentions birthdays - don't ask permission.
+
+NOTES (Silverbullet):
+Notes are markdown files. Use paths like "Journal/2024-01-15" or "Projects/Minion".
+- browse_notes to explore folders
+- search_notes_tool to find notes by title or content
+- read_note_tool to read a specific note
+- create_note_tool to create (fails if exists)
+- update_note_tool to replace content entirely
+- append_to_note_tool to add to end of note
+Preserve [[wiki-link]] syntax when editing. Search first if you don't know the exact path.
 
 IMPORTANT: Task IDs are prefixed with # (e.g., #5, #12). When the user refers to a task by number,
 ALWAYS use the exact numeric ID shown after the # symbol. Do NOT confuse list position with task ID.
@@ -326,6 +344,13 @@ def create_agent() -> Agent:
             update_contact_tool,
             remove_contact,
             get_contact_tasks,
+            # Notes tools
+            browse_notes,
+            read_note_tool,
+            create_note_tool,
+            update_note_tool,
+            append_to_note_tool,
+            search_notes_tool,
         ],
         instructions=SYSTEM_PROMPT,
         markdown=True,

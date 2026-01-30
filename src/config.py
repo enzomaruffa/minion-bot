@@ -21,6 +21,8 @@ class Settings:
     web_host: str
     web_port: int
     web_base_url: str
+    # Silverbullet notes
+    silverbullet_space_path: Path
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -54,6 +56,10 @@ class Settings:
             "WEB_BASE_URL", "https://miniongoogleauth.enzomaruffa.dev"
         )
 
+        silverbullet_space_path = Path(
+            os.environ.get("SILVERBULLET_SPACE_PATH", "")
+        )
+
         return cls(
             telegram_bot_token=telegram_bot_token,
             telegram_user_id=int(telegram_user_id),
@@ -65,6 +71,7 @@ class Settings:
             web_host=web_host,
             web_port=web_port,
             web_base_url=web_base_url,
+            silverbullet_space_path=silverbullet_space_path,
         )
 
 

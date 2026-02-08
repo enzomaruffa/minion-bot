@@ -14,6 +14,13 @@ def get_current_datetime() -> str:
 
 
 from .agenda import get_agenda  # noqa: E402
+from .bookmarks import (  # noqa: E402
+    list_reading_list,
+    mark_read,
+    remove_bookmark,
+    save_bookmark,
+    search_reading_list,
+)
 from .calendar import (  # noqa: E402
     create_calendar_event,
     delete_calendar_event,
@@ -29,6 +36,7 @@ from .contacts import (  # noqa: E402
     upcoming_birthdays,
     update_contact_tool,
 )
+from .mood import log_mood, mood_summary, show_mood_history  # noqa: E402
 from .notes import (  # noqa: E402
     append_to_note_tool,
     browse_notes,
@@ -37,6 +45,7 @@ from .notes import (  # noqa: E402
     search_notes_tool,
     update_note_tool,
 )
+from .profile import get_weather, show_profile, update_profile  # noqa: E402
 from .projects import (  # noqa: E402
     archive_project,
     assign_tasks_to_project,
@@ -53,6 +62,7 @@ from .reminders import (  # noqa: E402
     list_reminders,
     set_reminder,
 )
+from .scheduling import find_free_slot  # noqa: E402
 from .shopping import (  # noqa: E402
     add_to_list,
     check_item,
@@ -70,10 +80,12 @@ from .tasks import (  # noqa: E402
     delete_task_tool,
     get_overdue_tasks,
     get_task_details,
+    list_recurring,
     list_tags,
     list_tasks,
     move_task,
     search_tasks_tool,
+    stop_recurring,
     update_task_tool,
 )
 
@@ -132,4 +144,23 @@ __all__ = [
     "update_note_tool",
     "append_to_note_tool",
     "search_notes_tool",
+    # Profile tools
+    "update_profile",
+    "show_profile",
+    "get_weather",
+    # Bookmark tools
+    "save_bookmark",
+    "list_reading_list",
+    "mark_read",
+    "remove_bookmark",
+    "search_reading_list",
+    # Mood tools
+    "log_mood",
+    "show_mood_history",
+    "mood_summary",
+    # Scheduling tools
+    "find_free_slot",
+    # Recurring task tools
+    "list_recurring",
+    "stop_recurring",
 ]

@@ -4,7 +4,14 @@ import threading
 from src.config import settings
 from src.db import init_database
 from src.scheduler import add_cron_job, add_interval_job, shutdown_scheduler, start_scheduler
-from src.scheduler.jobs import deliver_reminders, eod_review, morning_summary, proactive_intelligence, sync_calendar
+from src.scheduler.jobs import (
+    deliver_reminders,
+    eod_review,
+    generate_recurring_tasks,
+    morning_summary,
+    proactive_intelligence,
+    sync_calendar,
+)
 from src.telegram.bot import create_application, register_commands
 
 logging.basicConfig(
@@ -33,6 +40,9 @@ def register_jobs() -> None:
 
     # Calendar sync every 30 minutes
     add_interval_job(sync_calendar, minutes=30, job_id="calendar_sync")
+
+    # Recurring task generation every 5 minutes
+    add_interval_job(generate_recurring_tasks, minutes=5, job_id="recurring_tasks")
 
 
 async def post_init(application) -> None:

@@ -14,7 +14,7 @@ from src.db.queries import (
     list_tasks_by_status,
     search_tasks,
     update_task,
-)  # get_subtasks still used in get_task_details
+)
 from src.db.queries import (
     list_projects as db_list_projects,
 )
@@ -30,13 +30,15 @@ def add_tasks(tasks: list[dict]) -> str:
                like "tomorrow", "next Monday", "in 2 hours" or ISO format),
                parent_id (optional: ID of parent task for creating subtasks),
                project (optional: project name like "Work", "Personal", "Health", etc.),
-               contact (optional: contact name to link the task to)
+               contact (optional: contact name to link the task to),
+               recurrence (optional: RRULE string like "FREQ=WEEKLY;BYDAY=SA")
 
     Returns:
         Confirmation message with created task IDs.
     """
     with session_scope() as session:
         created_ids = []
+        recurrence_flags = []
 
         for task_data in tasks:
             title = task_data.get("title")
@@ -51,6 +53,7 @@ def add_tasks(tasks: list[dict]) -> str:
                 due_date = parse_date(due_str)
 
             parent_id = task_data.get("parent_id")
+            recurrence = task_data.get("recurrence")
 
             # Resolve project by name
             project_id = None
@@ -76,10 +79,20 @@ def add_tasks(tasks: list[dict]) -> str:
                 project_id=project_id,
                 contact_id=contact_id,
             )
+
+            # Set recurrence rule if provided
+            if recurrence:
+                task.recurrence_rule = recurrence
+                session.flush()
+                recurrence_flags.append(True)
+            else:
+                recurrence_flags.append(False)
+
             created_ids.append(task.id)
 
     if len(created_ids) == 1:
-        return f"Created task <code>#{created_ids[0]}</code>"
+        recur = " 🔄" if recurrence_flags[0] else ""
+        return f"Created task <code>#{created_ids[0]}</code>{recur}"
     return f"Created {len(created_ids)} tasks: {', '.join(f'<code>#{id}</code>' for id in created_ids)}"
 
 
@@ -190,6 +203,7 @@ def _format_task_line(task: Task, indent: int = 0) -> str:
     prefix = "  " if indent > 0 else ""
     project_emoji = task.project.emoji + " " if task.project else ""
     contact_info = f" {task.contact.name}" if task.contact else ""
+    recur_icon = " 🔄" if task.recurrence_rule else ""
 
     # Check if overdue
     now = datetime.now(settings.timezone).replace(tzinfo=None)
@@ -199,7 +213,7 @@ def _format_task_line(task: Task, indent: int = 0) -> str:
 
     due = f" {format_date(task.due_date)}" if task.due_date else ""
     status_icon = {"todo": "[ ]", "in_progress": "[~]", "done": "[x]", "cancelled": "[-]"}.get(task.status.value, "")
-    return f"{prefix}{status_icon} #{task.id} {project_emoji}{task.title}{contact_info}{due}{overdue_badge}"
+    return f"{prefix}{status_icon} #{task.id} {project_emoji}{task.title}{contact_info}{due}{overdue_badge}{recur_icon}"
 
 
 def _build_task_tree(tasks: list[Task]) -> dict[int | None, list[Task]]:
@@ -454,6 +468,60 @@ def move_task(task_id: int, new_parent_id: int | None = None) -> str:
         else:
             update_task(session, task_id, clear_parent=True)
             return f"Made task #{task_id} a root task (no parent)"
+
+
+def stop_recurring(task_id: int) -> str:
+    """Stop a task from recurring. Clears the recurrence rule.
+
+    Args:
+        task_id: The ID of the recurring task.
+
+    Returns:
+        Confirmation message.
+    """
+    with session_scope() as session:
+        task = get_task(session, task_id)
+        if not task:
+            return f"Task <code>#{task_id}</code> not found."
+        if not task.recurrence_rule:
+            return f"Task <code>#{task_id}</code> is not recurring."
+
+        task.recurrence_rule = None
+        session.flush()
+        return f"✓ Stopped recurrence for <code>#{task_id}</code> <i>{task.title}</i>"
+
+
+def list_recurring() -> str:
+    """List all active recurring tasks.
+
+    Returns:
+        Formatted list of recurring tasks with their recurrence rules.
+    """
+    with session_scope() as session:
+        from sqlalchemy import select
+
+        from src.db.models import Task as TaskModel
+
+        stmt = (
+            select(TaskModel)
+            .where(
+                TaskModel.recurrence_rule.isnot(None),
+                TaskModel.status.in_([TaskStatus.TODO, TaskStatus.IN_PROGRESS]),
+            )
+            .order_by(TaskModel.created_at.desc())
+        )
+        tasks = session.scalars(stmt).all()
+
+        if not tasks:
+            return "<i>No active recurring tasks.</i>"
+
+        lines = ["<b>🔄 Recurring Tasks</b>"]
+        for task in tasks:
+            due = f" {format_date(task.due_date)}" if task.due_date else ""
+            lines.append(f"• <code>#{task.id}</code> {task.title}{due}")
+            lines.append(f"  <i>{task.recurrence_rule}</i>")
+
+        return "\n".join(lines)
 
 
 def list_tags() -> str:

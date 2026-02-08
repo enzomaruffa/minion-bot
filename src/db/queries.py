@@ -7,9 +7,11 @@ from sqlalchemy.sql import Select
 
 from .models import (
     Attachment,
+    Bookmark,
     CalendarEvent,
     Contact,
     ItemPriority,
+    MoodLog,
     Project,
     Reminder,
     ShoppingItem,
@@ -19,6 +21,7 @@ from .models import (
     TaskPriority,
     TaskStatus,
     UserCalendarToken,
+    UserProfile,
     UserProject,
 )
 
@@ -925,3 +928,218 @@ def update_user_calendar_token_credentials(
         token.expiry = expiry
     session.flush()
     return True
+
+
+# ============================================================================
+# UserProfile CRUD
+# ============================================================================
+
+
+def get_user_profile(session: Session) -> UserProfile | None:
+    """Get the user profile (single-user bot, so at most one)."""
+    return session.scalars(select(UserProfile)).first()
+
+
+def upsert_user_profile(session: Session, **fields) -> UserProfile:
+    """Create or update the user profile."""
+    profile = get_user_profile(session)
+    if not profile:
+        profile = UserProfile()
+        session.add(profile)
+
+    for key, value in fields.items():
+        if value is not None and hasattr(profile, key):
+            setattr(profile, key, value)
+
+    session.flush()
+    session.refresh(profile)
+    return profile
+
+
+# ============================================================================
+# Recurring Tasks
+# ============================================================================
+
+
+def list_completed_recurring_tasks(session: Session) -> Sequence[Task]:
+    """Get completed recurring tasks that need a new instance generated."""
+    stmt = _task_query().where(Task.status == TaskStatus.DONE).where(Task.recurrence_rule.isnot(None))
+    tasks = session.scalars(stmt).all()
+
+    # Filter in Python: exclude tasks that already have a pending successor
+    result = []
+    for task in tasks:
+        successor = session.scalars(
+            select(Task)
+            .where(Task.recurrence_source_id == task.id)
+            .where(Task.status.in_([TaskStatus.TODO, TaskStatus.IN_PROGRESS]))
+        ).first()
+        if not successor:
+            result.append(task)
+    return result
+
+
+def create_next_recurring_instance(session: Session, source_task: Task, next_due: datetime) -> Task:
+    """Create the next instance of a recurring task."""
+    new_task = Task(
+        title=source_task.title,
+        description=source_task.description,
+        priority=source_task.priority,
+        due_date=next_due,
+        project_id=source_task.project_id,
+        user_project_id=source_task.user_project_id,
+        contact_id=source_task.contact_id,
+        recurrence_rule=source_task.recurrence_rule,
+        recurrence_source_id=source_task.id,
+        status=TaskStatus.TODO,
+    )
+    session.add(new_task)
+    session.flush()
+    session.refresh(new_task)
+    return new_task
+
+
+# ============================================================================
+# Bookmark CRUD
+# ============================================================================
+
+
+def create_bookmark(
+    session: Session,
+    url: str,
+    title: str | None = None,
+    description: str | None = None,
+    domain: str | None = None,
+    tags: str | None = None,
+) -> Bookmark:
+    """Create a new bookmark."""
+    bookmark = Bookmark(url=url, title=title, description=description, domain=domain, tags=tags)
+    session.add(bookmark)
+    session.flush()
+    session.refresh(bookmark)
+    return bookmark
+
+
+def get_bookmark(session: Session, bookmark_id: int) -> Bookmark | None:
+    return session.get(Bookmark, bookmark_id)
+
+
+def list_bookmarks(
+    session: Session,
+    read: bool | None = None,
+    tag: str | None = None,
+    limit: int = 20,
+) -> Sequence[Bookmark]:
+    """List bookmarks with optional filters."""
+    stmt = select(Bookmark).order_by(Bookmark.created_at.desc()).limit(limit)
+    if read is not None:
+        stmt = stmt.where(Bookmark.read == read)
+    if tag:
+        stmt = stmt.where(Bookmark.tags.ilike(f"%{tag}%"))
+    return session.scalars(stmt).all()
+
+
+def mark_bookmark_read(session: Session, bookmark_id: int, read: bool = True) -> bool:
+    bookmark = session.get(Bookmark, bookmark_id)
+    if not bookmark:
+        return False
+    bookmark.read = read
+    session.flush()
+    return True
+
+
+def delete_bookmark(session: Session, bookmark_id: int) -> bool:
+    bookmark = session.get(Bookmark, bookmark_id)
+    if not bookmark:
+        return False
+    session.delete(bookmark)
+    session.flush()
+    return True
+
+
+def search_bookmarks(session: Session, query: str) -> Sequence[Bookmark]:
+    """Search bookmarks by title, description, or tags."""
+    stmt = (
+        select(Bookmark)
+        .where(
+            Bookmark.title.ilike(f"%{query}%")
+            | Bookmark.description.ilike(f"%{query}%")
+            | Bookmark.tags.ilike(f"%{query}%")
+        )
+        .order_by(Bookmark.created_at.desc())
+    )
+    return session.scalars(stmt).all()
+
+
+# ============================================================================
+# Mood CRUD
+# ============================================================================
+
+
+def log_mood(session: Session, date: datetime, score: int, note: str | None = None) -> MoodLog:
+    """Log mood for a date (upsert — one per day)."""
+    existing = session.scalars(select(MoodLog).where(MoodLog.date == date)).first()
+    if existing:
+        existing.score = score
+        if note is not None:
+            existing.note = note
+        session.flush()
+        session.refresh(existing)
+        return existing
+
+    mood = MoodLog(date=date, score=score, note=note)
+    session.add(mood)
+    session.flush()
+    session.refresh(mood)
+    return mood
+
+
+def get_mood_log(session: Session, date: datetime) -> MoodLog | None:
+    return session.scalars(select(MoodLog).where(MoodLog.date == date)).first()
+
+
+def get_mood_history(session: Session, days: int = 30) -> Sequence[MoodLog]:
+    """Get mood logs for the last N days."""
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+    stmt = select(MoodLog).where(MoodLog.date >= cutoff).order_by(MoodLog.date.desc())
+    return session.scalars(stmt).all()
+
+
+def get_mood_stats(session: Session, days: int = 30) -> dict:
+    """Get mood statistics for the last N days."""
+    cutoff = datetime.now(UTC) - timedelta(days=days)
+    logs = session.scalars(select(MoodLog).where(MoodLog.date >= cutoff).order_by(MoodLog.date)).all()
+
+    if not logs:
+        return {"count": 0, "avg": 0, "trend": "no data"}
+
+    scores = [m.score for m in logs]
+    avg = sum(scores) / len(scores)
+
+    # Trend: compare first half to second half
+    if len(scores) >= 4:
+        mid = len(scores) // 2
+        first_half = sum(scores[:mid]) / mid
+        second_half = sum(scores[mid:]) / (len(scores) - mid)
+        diff = second_half - first_half
+        if diff > 0.3:
+            trend = "improving"
+        elif diff < -0.3:
+            trend = "declining"
+        else:
+            trend = "stable"
+    else:
+        trend = "not enough data"
+
+    best = max(logs, key=lambda m: m.score)
+    worst = min(logs, key=lambda m: m.score)
+
+    return {
+        "count": len(logs),
+        "avg": round(avg, 1),
+        "trend": trend,
+        "best_day": best.date.strftime("%b %d"),
+        "best_score": best.score,
+        "worst_day": worst.date.strftime("%b %d"),
+        "worst_score": worst.score,
+    }

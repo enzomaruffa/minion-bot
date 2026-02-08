@@ -4,11 +4,13 @@ from src.config import settings
 from src.db import session_scope
 from src.db.queries import (
     count_backlog_tasks,
+    get_user_profile,
     list_calendar_events_range,
     list_overdue_tasks,
     list_pending_reminders,
     list_tasks_due_on_date,
 )
+from src.integrations.weather import fetch_weather, format_weather
 from src.utils import parse_date
 
 
@@ -52,8 +54,21 @@ def get_agenda(date: str | None = None) -> str:
         reminders = list_pending_reminders(session, day_end.replace(tzinfo=None))
         today_reminders = [r for r in reminders if r.remind_at >= day_start.replace(tzinfo=None)]
 
+        # Weather
+        profile = get_user_profile(session)
+        weather_line = None
+        if profile and profile.latitude and profile.longitude:
+            data = fetch_weather(profile.latitude, profile.longitude)
+            if data:
+                city = profile.city or ""
+                weather_line = f"{format_weather(data)} | {city}" if city else format_weather(data)
+
         # Format output while session is still open (to access relationships)
         lines = []
+
+        if weather_line:
+            lines.append(weather_line)
+            lines.append("")
 
         # Overdue tasks (show first!)
         if overdue_tasks:

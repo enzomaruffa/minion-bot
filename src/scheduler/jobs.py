@@ -7,6 +7,10 @@ from src.db import session_scope
 from src.db.models import TaskPriority, TaskStatus
 from src.db.queries import (
     count_tasks_by_due_date,
+    create_next_recurring_instance,
+    get_mood_log,
+    get_mood_stats,
+    list_completed_recurring_tasks,
     list_overdue_tasks,
     list_pending_reminders,
     list_tasks_by_status,
@@ -83,6 +87,13 @@ async def eod_review() -> None:
             tomorrow = (now + timedelta(days=1)).strftime("%Y-%m-%d")
             tomorrow_agenda = get_agenda(tomorrow)
             lines.append(tomorrow_agenda)
+
+            # Mood prompt if not logged today
+            today = now.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+            mood_today = get_mood_log(session, today)
+            if not mood_today:
+                lines.append("")
+                lines.append("How was your day? Rate 1-5 (😞😕😐🙂😄)")
 
         await send_message("\n".join(lines))
         logger.info("EOD review sent")
@@ -165,7 +176,12 @@ async def proactive_intelligence() -> None:
                     f'  "{task.title[:60]}{"..." if len(task.title) > 60 else ""}"'
                 )
 
-            # 5. Upcoming birthdays (within 7 days)
+            # 5. Mood trend check
+            mood_stats = get_mood_stats(session, days=7)
+            if mood_stats["count"] >= 3 and mood_stats["avg"] <= 2.0:
+                messages.append("Your mood has been low lately. Take care of yourself 💙")
+
+            # 6. Upcoming birthdays (within 7 days)
             upcoming_contacts = list_upcoming_birthdays(session, within_days=7)
             if upcoming_contacts:
                 today = datetime.now(settings.timezone).date()
@@ -200,3 +216,41 @@ async def sync_calendar() -> None:
         logger.info(f"Calendar sync complete: {count} events synced")
     except Exception as e:
         logger.exception(f"Error in calendar sync job: {e}")
+
+
+def _get_next_occurrence(rrule_str: str, after: datetime) -> datetime | None:
+    """Calculate next occurrence from an RRULE string after a given date."""
+    try:
+        from dateutil.rrule import rrulestr
+
+        rule = rrulestr(f"RRULE:{rrule_str}", dtstart=after)
+        next_dt = rule.after(after, inc=False)
+        return next_dt
+    except Exception as e:
+        logger.warning(f"Failed to parse RRULE '{rrule_str}': {e}")
+        return None
+
+
+async def generate_recurring_tasks() -> None:
+    """Generate next instances of completed recurring tasks."""
+    logger.info("Running recurring tasks generation")
+    try:
+        with session_scope() as session:
+            tasks = list_completed_recurring_tasks(session)
+            generated = 0
+
+            for task in tasks:
+                after = task.due_date or task.updated_at or datetime.now(settings.timezone).replace(tzinfo=None)
+                next_due = _get_next_occurrence(task.recurrence_rule, after)
+
+                if next_due:
+                    create_next_recurring_instance(session, task, next_due)
+                    generated += 1
+                    logger.info(f"Generated next instance for task #{task.id}: due {next_due}")
+                else:
+                    logger.warning(f"Could not compute next occurrence for task #{task.id}")
+
+            if generated:
+                logger.info(f"Generated {generated} recurring task instances")
+    except Exception as e:
+        logger.exception(f"Error generating recurring tasks: {e}")

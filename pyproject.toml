@@ -16,6 +16,7 @@ dependencies = [
     "sqlalchemy>=2.0.46",
     "dateparser>=1.2.0",
     "uvicorn>=0.34.0",
+    "geopy>=2.4.1",
 ]
 
 [build-system]

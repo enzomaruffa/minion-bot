@@ -26,6 +26,7 @@ from src.telegram.commands import (
     groceries_command,
     help_command,
     lists_command,
+    me_command,
     projects_command,
     reminders_command,
     require_auth,
@@ -157,6 +158,7 @@ async def register_commands(application: Application) -> None:
         BotCommand("wishlist", "Wishlist"),
         BotCommand("contacts", "All contacts"),
         BotCommand("birthdays", "Upcoming birthdays"),
+        BotCommand("me", "Your profile"),
         BotCommand("auth", "Connect Google Calendar"),
         BotCommand("help", "Show help"),
     ]
@@ -186,6 +188,8 @@ def create_application() -> Application:
     # Contact commands
     application.add_handler(CommandHandler("contacts", contacts_command))
     application.add_handler(CommandHandler("birthdays", birthdays_command))
+    # Profile command
+    application.add_handler(CommandHandler("me", me_command))
 
     # Add message handler for text messages
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))

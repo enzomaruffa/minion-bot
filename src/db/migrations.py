@@ -180,3 +180,115 @@ MIGRATIONS.append(
         _005_add_indexes,
     )
 )
+
+
+def _006_add_user_profile(session: Session) -> None:
+    """Add user_profiles table."""
+    result = session.execute(
+        text("SELECT name FROM sqlite_master WHERE type='table' AND name='user_profiles'")
+    ).fetchone()
+    if not result:
+        session.execute(
+            text("""
+            CREATE TABLE user_profiles (
+                id INTEGER PRIMARY KEY,
+                display_name VARCHAR(100),
+                city VARCHAR(100),
+                latitude FLOAT,
+                longitude FLOAT,
+                timezone_str VARCHAR(50),
+                work_start_hour INTEGER,
+                work_end_hour INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        )
+    session.flush()
+
+
+MIGRATIONS.append(
+    (
+        "006_add_user_profile",
+        "Add user_profiles table",
+        _006_add_user_profile,
+    )
+)
+
+
+def _007_add_recurring_tasks(session: Session) -> None:
+    """Add recurrence columns to tasks table."""
+    if not _column_exists(session, "tasks", "recurrence_rule"):
+        session.execute(text("ALTER TABLE tasks ADD COLUMN recurrence_rule VARCHAR(255)"))
+    if not _column_exists(session, "tasks", "recurrence_source_id"):
+        session.execute(text("ALTER TABLE tasks ADD COLUMN recurrence_source_id INTEGER REFERENCES tasks(id)"))
+    session.flush()
+
+
+MIGRATIONS.append(
+    (
+        "007_add_recurring_tasks",
+        "Add recurrence_rule and recurrence_source_id to tasks",
+        _007_add_recurring_tasks,
+    )
+)
+
+
+def _008_add_bookmarks(session: Session) -> None:
+    """Add bookmarks table."""
+    result = session.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='bookmarks'")).fetchone()
+    if not result:
+        session.execute(
+            text("""
+            CREATE TABLE bookmarks (
+                id INTEGER PRIMARY KEY,
+                url VARCHAR(2048) UNIQUE NOT NULL,
+                title VARCHAR(500),
+                description TEXT,
+                domain VARCHAR(255),
+                tags VARCHAR(500),
+                read BOOLEAN DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        )
+        session.execute(text("CREATE INDEX IF NOT EXISTS ix_bookmarks_read ON bookmarks (read)"))
+    session.flush()
+
+
+MIGRATIONS.append(
+    (
+        "008_add_bookmarks",
+        "Add bookmarks table",
+        _008_add_bookmarks,
+    )
+)
+
+
+def _009_add_mood_logs(session: Session) -> None:
+    """Add mood_logs table."""
+    result = session.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='mood_logs'")).fetchone()
+    if not result:
+        session.execute(
+            text("""
+            CREATE TABLE mood_logs (
+                id INTEGER PRIMARY KEY,
+                date DATETIME UNIQUE NOT NULL,
+                score INTEGER NOT NULL,
+                note TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        )
+        session.execute(text("CREATE INDEX IF NOT EXISTS ix_mood_logs_date ON mood_logs (date)"))
+    session.flush()
+
+
+MIGRATIONS.append(
+    (
+        "009_add_mood_logs",
+        "Add mood_logs table",
+        _009_add_mood_logs,
+    )
+)

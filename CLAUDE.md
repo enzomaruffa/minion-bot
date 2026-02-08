@@ -27,12 +27,13 @@ minion/
 │   ├── utils.py              # Shared helpers (date parsing, birthday calc)
 │   ├── agent/
 │   │   ├── agent.py          # Agent singleton, system prompt, tool_logger_hook
-│   │   └── tools/            # ~40 tool functions (tasks, shopping, contacts, calendar, notes)
+│   │   └── tools/            # ~55 tool functions (tasks, shopping, contacts, calendar, notes, profile, bookmarks, mood, scheduling)
 │   ├── telegram/
 │   │   ├── bot.py            # Message/voice/photo handlers, send_message, error notifications
 │   │   └── commands.py       # Slash command handlers (/tasks, /today, /auth, etc.)
 │   ├── integrations/
 │   │   ├── calendar.py       # Google Calendar: auth, fetch, sync, CRUD
+│   │   ├── weather.py        # Open-Meteo weather API (free, no key)
 │   │   ├── silverbullet.py   # Filesystem-based notes: read, write, search
 │   │   ├── vision.py         # GPT image analysis
 │   │   └── voice.py          # Whisper transcription
@@ -40,8 +41,8 @@ minion/
 │   │   └── jobs.py           # Cron/interval jobs: agenda, reminders, calendar sync
 │   ├── db/
 │   │   ├── __init__.py       # session_scope, init_database
-│   │   ├── models.py         # SQLAlchemy models (Task, Reminder, Contact, etc.)
-│   │   ├── migrations.py     # Consolidated migration system (5 migrations)
+│   │   ├── models.py         # SQLAlchemy models (Task, Reminder, Contact, UserProfile, Bookmark, MoodLog, etc.)
+│   │   ├── migrations.py     # Consolidated migration system (9 migrations)
 │   │   └── queries.py        # All DB query functions
 │   └── web/
 │       └── server.py         # FastAPI OAuth callback server
@@ -106,7 +107,16 @@ Use `days_until_birthday(birthday, today)` and `format_birthday_proximity(days)`
 ### Error notifications: bounded dict
 `_last_error_notification` in `bot.py` is capped at 100 entries. If it exceeds that, it clears entirely. This prevents unbounded growth from diverse tool error keys.
 
+### Recurring tasks: RRULE-based
+Tasks with `recurrence_rule` (iCalendar RRULE format) auto-generate next instances when completed. Scheduler job runs every 5 min via `dateutil.rrule`. New instances link back via `recurrence_source_id`.
+
+### User profile: single-row pattern
+`UserProfile` is single-row (one user bot). `get_user_profile(session)` returns it, `upsert_user_profile(session, **fields)` creates or updates. Used by weather (lat/lon), smart scheduling (work hours), and `/me` command.
+
+### Weather: Open-Meteo API
+`src/integrations/weather.py` — free, no API key. Injected into agenda via `get_agenda()` when profile has lat/lon.
+
 ### Scheduler jobs
 Registered in `src/main.py:register_jobs()`. Current jobs:
-- Morning summary (10:30), EOD review (21:00), Proactive intelligence (17:00)
-- Reminder delivery (every 1 min), Calendar sync (every 30 min)
+- Morning summary (10:30), EOD review (21:00 + mood prompt), Proactive intelligence (17:00 + mood trend)
+- Reminder delivery (every 1 min), Calendar sync (every 30 min), Recurring tasks generation (every 5 min)

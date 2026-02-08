@@ -68,30 +68,48 @@ from src.agent.tools import (  # noqa: E402 — must follow tool_logger_hook def
     create_project,
     delete_calendar_event,
     delete_task_tool,
+    # Scheduling tools
+    find_free_slot,
     get_agenda,
     get_contact_tasks,
     get_current_datetime,
     get_overdue_tasks,
     get_task_details,
+    # Profile tools
+    get_weather,
     list_calendar_events,
     list_projects_tool,
+    # Bookmark tools
+    list_reading_list,
+    # Recurring task tools
+    list_recurring,
     list_reminders,
     list_tags,
     list_tasks,
+    # Mood tools
+    log_mood,
+    mark_read,
+    mood_summary,
     move_project_tasks,
     move_task,
     purchase_item,
     read_note_tool,
+    remove_bookmark,
     remove_contact,
     remove_item,
+    save_bookmark,
     search_notes_tool,
+    search_reading_list,
     search_tasks_tool,
     # Reminder tools
     set_reminder,
     show_contacts,
     show_gifts_for_contact,
     show_list,
+    show_mood_history,
+    show_profile,
     show_project,
+    stop_recurring,
     test_calendar,
     unassign_from_project,
     uncheck_item,
@@ -99,6 +117,7 @@ from src.agent.tools import (  # noqa: E402 — must follow tool_logger_hook def
     update_calendar_event,
     update_contact_tool,
     update_note_tool,
+    update_profile,
     update_project,
     update_task_tool,
 )
@@ -221,6 +240,39 @@ Preserve [[wiki-link]] syntax when editing. Search first if you don't know the e
 IMPORTANT: Task IDs are prefixed with # (e.g., #5, #12). When the user refers to a task by number,
 ALWAYS use the exact numeric ID shown after the # symbol. Do NOT confuse list position with task ID.
 For example, if the list shows "#10: Buy groceries", the task ID is 10, not the position in the list.
+
+USER PROFILE:
+When user mentions where they live, their name, or timezone preferences, use update_profile to save it.
+Use show_profile to check stored preferences when relevant.
+
+WEATHER:
+Weather is automatically shown in the agenda. User can also ask "what's the weather?" and you'll use get_weather.
+
+RECURRING TASKS:
+When user says "every day/week/month/year", set recurrence on the task.
+Map natural language to RRULE format:
+- "every day" → FREQ=DAILY
+- "every Monday" → FREQ=WEEKLY;BYDAY=MO
+- "every weekday" → FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR
+- "every month on the 15th" → FREQ=MONTHLY;BYMONTHDAY=15
+- "every year" → FREQ=YEARLY
+- "every Saturday" → FREQ=WEEKLY;BYDAY=SA
+Recurring tasks show 🔄 in list views. When completed, a new instance auto-generates.
+Use stop_recurring to end a recurrence pattern.
+
+BOOKMARKS:
+When user shares a URL or says "save this link", use save_bookmark.
+Auto-detect URLs in messages and offer to save them.
+Use list_reading_list to show bookmarks, search_reading_list to search.
+
+SMART SCHEDULING:
+When user asks to find time for something, use find_free_slot.
+Suggest slots and offer to create the event directly.
+
+MOOD TRACKING:
+When user shares how they feel or rates their day, use log_mood (1-5 scale).
+1: terrible, 2: bad, 3: okay, 4: good, 5: great.
+Use mood_summary to check trends when relevant.
 
 When the user mentions something that sounds like a task, offer to add it.
 When they mention a time or deadline, offer to set a reminder.
@@ -354,6 +406,25 @@ def create_agent() -> Agent:
             update_note_tool,
             append_to_note_tool,
             search_notes_tool,
+            # Profile tools
+            update_profile,
+            show_profile,
+            get_weather,
+            # Bookmark tools
+            save_bookmark,
+            list_reading_list,
+            mark_read,
+            remove_bookmark,
+            search_reading_list,
+            # Mood tools
+            log_mood,
+            show_mood_history,
+            mood_summary,
+            # Scheduling tools
+            find_free_slot,
+            # Recurring task tools
+            list_recurring,
+            stop_recurring,
         ],
         instructions=SYSTEM_PROMPT,
         markdown=True,

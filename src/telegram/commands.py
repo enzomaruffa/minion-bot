@@ -4,7 +4,7 @@ from functools import wraps
 
 from telegram.ext import ContextTypes
 
-from src.agent.tools import get_agenda, list_projects_tool, list_reminders, list_tasks
+from src.agent.tools import get_agenda, list_projects_tool, list_reminders, list_tasks, show_profile
 from src.config import settings
 from src.db import session_scope
 from src.db.models import ShoppingListType
@@ -319,6 +319,14 @@ async def reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 
 @require_auth
+async def me_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /me command - show user profile."""
+    output = show_profile()
+    _store_command_context("/me", output)
+    await update.message.reply_text(output, parse_mode="HTML")
+
+
+@require_auth
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /help command - show available commands."""
     calendar_status = "connected" if is_calendar_connected() else "not connected (/auth)"
@@ -343,6 +351,7 @@ Contacts
 /birthdays - upcoming birthdays
 
 Settings
+/me - your profile
 /auth - connect Google Calendar
 /help - this help
 

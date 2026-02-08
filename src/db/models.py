@@ -93,10 +93,14 @@ class Task(Base):
     user_project_id: Mapped[int | None] = mapped_column(ForeignKey("user_projects.id"), nullable=True, index=True)
     contact_id: Mapped[int | None] = mapped_column(ForeignKey("contacts.id"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
+    recurrence_rule: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    recurrence_source_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id"), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
 
-    parent: Mapped[Optional["Task"]] = relationship("Task", remote_side=[id], back_populates="subtasks")
-    subtasks: Mapped[list["Task"]] = relationship("Task", back_populates="parent")
+    parent: Mapped[Optional["Task"]] = relationship(
+        "Task", remote_side=[id], back_populates="subtasks", foreign_keys=[parent_id]
+    )
+    subtasks: Mapped[list["Task"]] = relationship("Task", back_populates="parent", foreign_keys="[Task.parent_id]")
     attachments: Mapped[list["Attachment"]] = relationship(back_populates="task")
     reminders: Mapped[list["Reminder"]] = relationship(back_populates="task")
     project: Mapped[Optional["Project"]] = relationship(back_populates="tasks")
@@ -182,6 +186,45 @@ class ShoppingItem(Base):
     def is_complete(self) -> bool:
         """Check if item is complete (purchased >= target or manually checked)."""
         return self.checked or self.quantity_purchased >= self.quantity_target
+
+
+class UserProfile(Base):
+    __tablename__ = "user_profiles"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    display_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    latitude: Mapped[float | None] = mapped_column(nullable=True)
+    longitude: Mapped[float | None] = mapped_column(nullable=True)
+    timezone_str: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    work_start_hour: Mapped[int | None] = mapped_column(nullable=True)  # 0-23
+    work_end_hour: Mapped[int | None] = mapped_column(nullable=True)  # 0-23
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+
+
+class Bookmark(Base):
+    __tablename__ = "bookmarks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    url: Mapped[str] = mapped_column(String(2048), unique=True)
+    title: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    domain: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    tags: Mapped[str | None] = mapped_column(String(500), nullable=True)  # Comma-separated
+    read: Mapped[bool] = mapped_column(default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+
+
+class MoodLog(Base):
+    __tablename__ = "mood_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    date: Mapped[datetime] = mapped_column(unique=True, index=True)  # Date only
+    score: Mapped[int] = mapped_column()  # 1-5
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
 
 
 class UserCalendarToken(Base):

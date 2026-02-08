@@ -8,6 +8,6 @@
     <span class="badge badge-{{ t.status.value }}">{{ t.status.value }}</span>
     <span class="badge badge-{{ t.priority.value }}">{{ t.priority.value }}</span>
     {% if t.due_date %}
-    <span style="font-size: 0.8rem; color: var(--pico-muted-color);">{{ t.due_date.strftime('%b %d') }}</span>
+    <span class="muted">{{ t.due_date.strftime('%b %d') }}</span>
     {% endif %}
 </div>

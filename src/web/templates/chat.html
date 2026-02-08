@@ -21,8 +21,8 @@
     }
     .chat-msg.user {
         align-self: flex-end;
-        background: var(--pico-primary-background);
-        color: var(--pico-primary-inverse);
+        background: var(--accent);
+        color: #fff;
     }
     .chat-msg.bot {
         align-self: flex-start;
@@ -31,9 +31,6 @@
     }
     .chat-msg.bot p { margin-bottom: 0.25rem; }
     .chat-msg.bot p:last-child { margin-bottom: 0; }
-    #chat-form { display: flex; gap: 0.5rem; }
-    #chat-form input { flex: 1; margin-bottom: 0; }
-    #chat-form button { width: auto; margin-bottom: 0; }
 </style>
 {% endblock %}
 {% block content %}
@@ -41,7 +38,7 @@
 
 <div id="chat-messages"></div>
 
-<form id="chat-form" onsubmit="sendMessage(event)">
+<form id="chat-form" class="inline-form" onsubmit="sendMessage(event)">
     <input type="text" id="chat-input" placeholder="Type a message..." autocomplete="off" required>
     <button type="submit" id="chat-btn">Send</button>
 </form>

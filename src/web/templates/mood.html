@@ -23,7 +23,7 @@
 {% endif %}
 
 <h4>Log Today</h4>
-<form hx-post="/app/mood" hx-target="#mood-list" hx-swap="afterbegin" hx-on::after-request="this.reset();" style="display: flex; gap: 0.5rem; align-items: end; margin-bottom: 1.5rem;">
+<form class="inline-form" hx-post="/app/mood" hx-target="#mood-list" hx-swap="afterbegin" hx-on::after-request="this.reset();" style="margin-bottom: 1.5rem;">
     <div style="display: flex; gap: 0.75rem;">
         {% for score, emoji in [(1, '&#128542;'), (2, '&#128533;'), (3, '&#128528;'), (4, '&#128578;'), (5, '&#128516;')] %}
         <label style="cursor: pointer; font-size: 1.5rem; text-align: center;">
@@ -32,8 +32,8 @@
         </label>
         {% endfor %}
     </div>
-    <input type="text" name="note" placeholder="Note (optional)" style="margin-bottom: 0; flex: 1;">
-    <button type="submit" style="width: auto; margin-bottom: 0;">Log</button>
+    <input type="text" name="note" placeholder="Note (optional)">
+    <button type="submit">Log</button>
 </form>
 
 <h4>History</h4>
@@ -41,7 +41,7 @@
 {% for m in logs %}
 {% include "partials/mood_row.html" %}
 {% else %}
-<p style="color: var(--pico-muted-color);">No mood logs yet.</p>
+<p class="empty-state">No mood logs yet.</p>
 {% endfor %}
 </div>
 {% endblock %}

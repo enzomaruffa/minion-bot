@@ -3,13 +3,13 @@
 {% block content %}
 <p><a href="/app/tasks">&larr; Back to tasks</a></p>
 
-<div style="display: flex; justify-content: space-between; align-items: start;">
+<div class="page-header">
     <h2>
         {% if task.project %}{{ task.project.emoji }} {% endif %}
         {{ task.title }}
         {% if task.recurrence_rule %} &#128260;{% endif %}
     </h2>
-    <div style="display: flex; gap: 0.5rem;">
+    <div class="pills">
         <span class="badge badge-{{ task.status.value }}">{{ task.status.value }}</span>
         <span class="badge badge-{{ task.priority.value }}">{{ task.priority.value }}</span>
     </div>
@@ -36,7 +36,7 @@
 <hr>
 
 <h4>Quick Actions</h4>
-<div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+<div class="pills">
     {% if task.status.value != 'done' %}
     <form hx-patch="/app/tasks/{{ task.id }}" hx-target="body" hx-vals='{"status": "done"}'>
         <button type="submit" class="outline">Complete</button>

@@ -3,11 +3,11 @@
 {% block content %}
 <h2>Calendar</h2>
 
-<div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; align-items: center;">
-    <a href="/app/calendar?days=1" role="button" class="outline" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">Today</a>
-    <a href="/app/calendar?days=3" role="button" class="outline" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">3 Days</a>
-    <a href="/app/calendar?days=7" role="button" class="outline{% if days == 7 %} contrast{% endif %}" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">Week</a>
-    <a href="/app/calendar?days=14" role="button" class="outline" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">2 Weeks</a>
+<div class="pills">
+    <a href="/app/calendar?days=1" class="pill{% if days == 1 %} active{% endif %}">Today</a>
+    <a href="/app/calendar?days=3" class="pill{% if days == 3 %} active{% endif %}">3 Days</a>
+    <a href="/app/calendar?days=7" class="pill{% if days == 7 %} active{% endif %}">Week</a>
+    <a href="/app/calendar?days=14" class="pill{% if days == 14 %} active{% endif %}">2 Weeks</a>
 </div>
 
 {% if events %}
@@ -21,10 +21,10 @@
     <div class="task-row">
         <span class="task-id">{{ ev.start_time.strftime('%H:%M') }}</span>
         <span class="task-title">{{ ev.title }}</span>
-        <span style="font-size: 0.85rem; color: var(--pico-muted-color);">{{ ev.end_time.strftime('%H:%M') }}</span>
+        <span class="muted">{{ ev.end_time.strftime('%H:%M') }}</span>
     </div>
 {% endfor %}
 {% else %}
-<p style="color: var(--pico-muted-color);">No events in this period.</p>
+<p class="empty-state">No events in this period.</p>
 {% endif %}
 {% endblock %}

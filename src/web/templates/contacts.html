@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Contacts - Minion{% endblock %}
 {% block content %}
-<div style="display: flex; justify-content: space-between; align-items: center;">
+<div class="page-header">
     <h2>Contacts</h2>
     <button onclick="document.getElementById('add-contact-dialog').showModal()">+ New Contact</button>
 </div>
@@ -10,7 +10,7 @@
 {% for c in contacts %}
 {% include "partials/contact_row.html" %}
 {% else %}
-<p style="color: var(--pico-muted-color);">No contacts yet.</p>
+<p class="empty-state">No contacts yet.</p>
 {% endfor %}
 </div>
 

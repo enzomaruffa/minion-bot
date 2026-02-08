@@ -9,8 +9,8 @@
         <small>({{ item.quantity_purchased }}/{{ item.quantity_target }})</small>
         {% endif %}
     </span>
-    {% if item.recipient %}<small style="color: var(--pico-muted-color);">for {{ item.recipient }}</small>{% endif %}
-    <button class="outline secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; width: auto; margin: 0;"
+    {% if item.recipient %}<small class="muted">for {{ item.recipient }}</small>{% endif %}
+    <button class="outline secondary btn-icon"
         hx-delete="/app/shopping/items/{{ item.id }}" hx-target="#item-{{ item.id }}" hx-swap="outerHTML"
         hx-confirm="Remove {{ item.name }}?">&#10005;</button>
 </div>

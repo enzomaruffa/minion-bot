@@ -58,7 +58,7 @@
 <div class="task-row">
     <span class="task-id">{{ ev.start_time.strftime('%H:%M') }}</span>
     <span class="task-title">{{ ev.title }}</span>
-    <span style="color: var(--pico-muted-color); font-size: 0.85rem;">{{ ev.end_time.strftime('%H:%M') }}</span>
+    <span class="muted">{{ ev.end_time.strftime('%H:%M') }}</span>
 </div>
 {% endfor %}
 {% endif %}

@@ -1,23 +1,23 @@
 {% extends "base.html" %}
 {% block title %}Tasks - Minion{% endblock %}
 {% block content %}
-<div style="display: flex; justify-content: space-between; align-items: center;">
+<div class="page-header">
     <h2>Tasks</h2>
     <button onclick="document.getElementById('add-task-dialog').showModal()">+ New Task</button>
 </div>
 
-<div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
-    <a href="/app/tasks" role="button" class="outline{% if not status_filter %} contrast{% endif %}" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">All</a>
-    <a href="/app/tasks?status=todo" role="button" class="outline{% if status_filter == 'todo' %} contrast{% endif %}" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">Todo</a>
-    <a href="/app/tasks?status=in_progress" role="button" class="outline{% if status_filter == 'in_progress' %} contrast{% endif %}" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">In Progress</a>
-    <a href="/app/tasks?status=done" role="button" class="outline{% if status_filter == 'done' %} contrast{% endif %}" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">Done</a>
+<div class="pills">
+    <a href="/app/tasks" class="pill{% if not status_filter %} active{% endif %}">All</a>
+    <a href="/app/tasks?status=todo" class="pill{% if status_filter == 'todo' %} active{% endif %}">Todo</a>
+    <a href="/app/tasks?status=in_progress" class="pill{% if status_filter == 'in_progress' %} active{% endif %}">In Progress</a>
+    <a href="/app/tasks?status=done" class="pill{% if status_filter == 'done' %} active{% endif %}">Done</a>
 </div>
 
 <div id="task-list">
 {% for t in tasks %}
 {% include "partials/task_row.html" %}
 {% else %}
-<p style="color: var(--pico-muted-color);">No tasks found.</p>
+<p class="empty-state">No tasks found.</p>
 {% endfor %}
 </div>
 

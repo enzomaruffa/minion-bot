@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,17 +10,20 @@
         body {
             display: flex; justify-content: center; align-items: center;
             min-height: 100vh; margin: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%);
         }
         .login-card {
-            background: white; padding: 2.5rem; border-radius: 16px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            background: var(--pico-card-background-color);
+            color: var(--pico-color);
+            padding: 2.5rem; border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
             max-width: 400px; width: 100%;
+            border: 1px solid var(--pico-muted-border-color);
         }
-        .login-card h1 { text-align: center; margin-bottom: 0.5rem; }
-        .login-card p.subtitle { text-align: center; color: #666; margin-bottom: 2rem; }
+        .login-card h1 { text-align: center; margin-bottom: 0.5rem; color: #818cf8; }
+        .login-card p.subtitle { text-align: center; color: var(--pico-muted-color); margin-bottom: 2rem; }
         #step-2 { display: none; }
-        .error { color: #dc2626; font-size: 0.9rem; margin-top: 0.5rem; }
+        .error { color: #fca5a5; font-size: 0.9rem; margin-top: 0.5rem; }
     </style>
 </head>
 <body>

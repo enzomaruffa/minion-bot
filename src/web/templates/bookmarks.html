@@ -1,22 +1,22 @@
 {% extends "base.html" %}
 {% block title %}Bookmarks - Minion{% endblock %}
 {% block content %}
-<div style="display: flex; justify-content: space-between; align-items: center;">
+<div class="page-header">
     <h2>Reading List</h2>
     <button onclick="document.getElementById('add-bookmark-dialog').showModal()">+ Add URL</button>
 </div>
 
-<div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
-    <a href="/app/bookmarks" role="button" class="outline{% if read_filter is none %} contrast{% endif %}" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">All</a>
-    <a href="/app/bookmarks?read=false" role="button" class="outline{% if read_filter == false %} contrast{% endif %}" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">Unread</a>
-    <a href="/app/bookmarks?read=true" role="button" class="outline{% if read_filter == true %} contrast{% endif %}" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">Read</a>
+<div class="pills">
+    <a href="/app/bookmarks" class="pill{% if read_filter is none %} active{% endif %}">All</a>
+    <a href="/app/bookmarks?read=false" class="pill{% if read_filter == false %} active{% endif %}">Unread</a>
+    <a href="/app/bookmarks?read=true" class="pill{% if read_filter == true %} active{% endif %}">Read</a>
 </div>
 
 <div id="bookmarks-list">
 {% for b in bookmarks %}
 {% include "partials/bookmark_row.html" %}
 {% else %}
-<p style="color: var(--pico-muted-color);">No bookmarks saved yet.</p>
+<p class="empty-state">No bookmarks saved yet.</p>
 {% endfor %}
 </div>
 

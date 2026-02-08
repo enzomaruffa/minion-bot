@@ -3,23 +3,23 @@
 {% block content %}
 <h2>Shopping Lists</h2>
 
-<div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
-    <a href="/app/shopping?list=groceries" role="button" class="outline{% if current_list == 'groceries' %} contrast{% endif %}" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">Groceries</a>
-    <a href="/app/shopping?list=gifts" role="button" class="outline{% if current_list == 'gifts' %} contrast{% endif %}" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">Gifts</a>
-    <a href="/app/shopping?list=wishlist" role="button" class="outline{% if current_list == 'wishlist' %} contrast{% endif %}" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">Wishlist</a>
+<div class="pills">
+    <a href="/app/shopping?list=groceries" class="pill{% if current_list == 'groceries' %} active{% endif %}">Groceries</a>
+    <a href="/app/shopping?list=gifts" class="pill{% if current_list == 'gifts' %} active{% endif %}">Gifts</a>
+    <a href="/app/shopping?list=wishlist" class="pill{% if current_list == 'wishlist' %} active{% endif %}">Wishlist</a>
 </div>
 
-<form hx-post="/app/shopping" hx-target="#items-list" hx-swap="afterbegin" hx-on::after-request="this.reset();" style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+<form class="inline-form" hx-post="/app/shopping" hx-target="#items-list" hx-swap="afterbegin" hx-on::after-request="this.reset();">
     <input type="hidden" name="list_type" value="{{ current_list }}">
-    <input type="text" name="name" placeholder="Add item..." required style="margin-bottom: 0;">
-    <button type="submit" style="width: auto; margin-bottom: 0;">Add</button>
+    <input type="text" name="name" placeholder="Add item..." required>
+    <button type="submit">Add</button>
 </form>
 
 <div id="items-list">
 {% for item in items %}
 {% include "partials/shopping_item.html" %}
 {% else %}
-<p style="color: var(--pico-muted-color);">List is empty.</p>
+<p class="empty-state">List is empty.</p>
 {% endfor %}
 </div>
 {% endblock %}

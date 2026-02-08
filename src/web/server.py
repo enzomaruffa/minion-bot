@@ -7,8 +7,8 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from google_auth_oauthlib.flow import Flow
 
@@ -32,6 +32,21 @@ from src.web.views import router as views_router  # noqa: E402
 app.include_router(auth_router)
 app.include_router(api_router)
 app.include_router(views_router)
+
+
+@app.exception_handler(HTTPException)
+async def auth_exception_handler(request: Request, exc: HTTPException):
+    """Redirect unauthenticated browser requests to login; return JSON for API/HTMX."""
+    if exc.status_code == 401:
+        is_htmx = request.headers.get("HX-Request") == "true"
+        is_api = request.url.path.startswith("/api/")
+        if is_htmx:
+            return HTMLResponse("", status_code=200, headers={"HX-Redirect": "/auth/login"})
+        if not is_api:
+            return RedirectResponse(url="/auth/login", status_code=303)
+        return JSONResponse({"detail": exc.detail}, status_code=401)
+    # Re-raise non-401 errors as default response
+    return JSONResponse({"detail": exc.detail}, status_code=exc.status_code, headers=getattr(exc, "headers", None))
 
 
 # ============================================================================

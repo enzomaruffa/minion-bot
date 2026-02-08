@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Tasks - Minion{% endblock %}
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center;">
+    <h2>Tasks</h2>
+    <button onclick="document.getElementById('add-task-dialog').showModal()">+ New Task</button>
+</div>
+
+<div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
+    <a href="/app/tasks" role="button" class="outline{% if not status_filter %} contrast{% endif %}" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">All</a>
+    <a href="/app/tasks?status=todo" role="button" class="outline{% if status_filter == 'todo' %} contrast{% endif %}" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">Todo</a>
+    <a href="/app/tasks?status=in_progress" role="button" class="outline{% if status_filter == 'in_progress' %} contrast{% endif %}" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">In Progress</a>
+    <a href="/app/tasks?status=done" role="button" class="outline{% if status_filter == 'done' %} contrast{% endif %}" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">Done</a>
+</div>
+
+<div id="task-list">
+{% for t in tasks %}
+{% include "partials/task_row.html" %}
+{% else %}
+<p style="color: var(--pico-muted-color);">No tasks found.</p>
+{% endfor %}
+</div>
+
+<dialog id="add-task-dialog">
+    <article>
+        <header>
+            <button aria-label="Close" rel="prev" onclick="this.closest('dialog').close()"></button>
+            <h3>New Task</h3>
+        </header>
+        <form hx-post="/app/tasks" hx-target="#task-list" hx-swap="afterbegin" hx-on::after-request="this.closest('dialog').close(); this.reset();">
+            <label for="title">Title</label>
+            <input type="text" name="title" id="title" required>
+            <label for="description">Description</label>
+            <textarea name="description" id="description" rows="2"></textarea>
+            <div class="grid">
+                <div>
+                    <label for="priority">Priority</label>
+                    <select name="priority" id="priority">
+                        <option value="low">Low</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High</option>
+                        <option value="urgent">Urgent</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="due_date">Due Date</label>
+                    <input type="datetime-local" name="due_date" id="due_date">
+                </div>
+            </div>
+            <button type="submit">Create Task</button>
+        </form>
+    </article>
+</dialog>
+{% endblock %}

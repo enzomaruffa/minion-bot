@@ -1,14 +1,15 @@
-# MINION - Telegram Personal Assistant Bot
+# MINION - Personal Assistant Bot
 
-Single-user Telegram bot powered by an Agno agent (OpenAI GPT). Manages tasks, reminders, shopping lists, contacts/birthdays, calendar events, and Silverbullet notes. Runs a FastAPI OAuth server alongside the Telegram polling loop. APScheduler handles proactive behaviors (morning summary, reminders, birthday nudges, calendar sync).
+Single-user personal assistant powered by an Agno agent (OpenAI GPT). Manages tasks, reminders, shopping lists, contacts/birthdays, calendar events, and Silverbullet notes. Accessible via Telegram bot and web dashboard (HTMX). Runs a FastAPI server alongside the optional Telegram polling loop. APScheduler handles proactive behaviors (morning summary, reminders, birthday nudges, calendar sync).
 
 ## Tech Stack
 - Python 3.11+ with `uv` for package management
 - Agno agent framework with configurable OpenAI models
 - SQLite via SQLAlchemy (declarative models)
-- python-telegram-bot for Telegram integration
+- python-telegram-bot for Telegram integration (optional — web-only mode supported)
+- FastAPI + Jinja2 + HTMX + Pico CSS for web dashboard
 - APScheduler for proactive behaviors
-- Google Calendar API + FastAPI OAuth server
+- Google Calendar API + OAuth server
 - Silverbullet notes via filesystem mount
 
 ## Commands
@@ -24,9 +25,10 @@ minion/
 ├── src/
 │   ├── main.py              # Entrypoint: DB init, scheduler, web server, Telegram polling
 │   ├── config.py             # Settings dataclass from env vars
+│   ├── notifications.py      # Notification dispatcher (decouples scheduler from Telegram)
 │   ├── utils.py              # Shared helpers (date parsing, birthday calc)
 │   ├── agent/
-│   │   ├── agent.py          # Agent singleton, system prompt, tool_logger_hook
+│   │   ├── agent.py          # Agent singleton, system prompt (format-aware), tool_logger_hook
 │   │   └── tools/            # ~55 tool functions (tasks, shopping, contacts, calendar, notes, profile, bookmarks, mood, scheduling)
 │   ├── telegram/
 │   │   ├── bot.py            # Message/voice/photo handlers, send_message, error notifications
@@ -41,11 +43,16 @@ minion/
 │   │   └── jobs.py           # Cron/interval jobs: agenda, reminders, calendar sync
 │   ├── db/
 │   │   ├── __init__.py       # session_scope, init_database
-│   │   ├── models.py         # SQLAlchemy models (Task, Reminder, Contact, UserProfile, Bookmark, MoodLog, etc.)
-│   │   ├── migrations.py     # Consolidated migration system (9 migrations)
+│   │   ├── models.py         # SQLAlchemy models (Task, Reminder, Contact, UserProfile, Bookmark, MoodLog, WebSession, etc.)
+│   │   ├── migrations.py     # Consolidated migration system (10 migrations)
 │   │   └── queries.py        # All DB query functions
 │   └── web/
-│       └── server.py         # FastAPI OAuth callback server
+│       ├── server.py         # FastAPI app: mounts routers, OAuth, templates
+│       ├── auth.py           # Telegram code-based login, session management
+│       ├── api.py            # REST API endpoints (/api/v1/*)
+│       ├── views.py          # HTMX dashboard page routes (/app/*)
+│       ├── serializers.py    # Pydantic models for API request/response
+│       └── templates/        # Jinja2 templates (base, login, dashboard, tasks, etc.)
 ├── tasks/                    # Task files for development workflow
 ├── scripts/                  # One-off scripts (calendar auth)
 ├── data/                     # SQLite databases
@@ -116,7 +123,23 @@ Tasks with `recurrence_rule` (iCalendar RRULE format) auto-generate next instanc
 ### Weather: Open-Meteo API
 `src/integrations/weather.py` — free, no API key. Injected into agenda via `get_agenda()` when profile has lat/lon.
 
+### Notification dispatcher
+`src/notifications.py` — `register_handler(fn)` / `notify(message, parse_mode)`. Scheduler jobs call `notify()` instead of importing `send_message` directly. Telegram `send_message` is registered as a handler on startup. This enables web-only mode (no Telegram bot token).
+
+### Web dashboard auth: Telegram code flow
+Login: enter Telegram user ID -> receive 6-digit code via Telegram -> verify in browser -> `WebSession` row created -> httponly cookie set for 30 days. `get_current_user` FastAPI dependency reads cookie, checks DB session.
+
+### Web-only mode
+When `TELEGRAM_BOT_TOKEN` is not set, the bot starts in web-only mode: no Telegram polling, scheduler still runs, web dashboard fully functional.
+
+### Format-aware agent
+`SYSTEM_PROMPT_BASE` + `FORMAT_HINTS[format]`. Telegram uses HTML formatting, web chat uses Markdown. `chat(message, format_hint="telegram"|"web")`.
+
+### Google OAuth moved to /oauth/*
+OAuth routes moved from `/auth/start` to `/oauth/start`, `/auth/callback` to `/oauth/callback`. Legacy redirects in place for backwards compatibility.
+
 ### Scheduler jobs
 Registered in `src/main.py:register_jobs()`. Current jobs:
 - Morning summary (10:30), EOD review (21:00 + mood prompt), Proactive intelligence (17:00 + mood trend)
 - Reminder delivery (every 1 min), Calendar sync (every 30 min), Recurring tasks generation (every 5 min)
+- Web session cleanup (daily 3 AM)

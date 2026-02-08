@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Bookmarks - Minion{% endblock %}
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center;">
+    <h2>Reading List</h2>
+    <button onclick="document.getElementById('add-bookmark-dialog').showModal()">+ Add URL</button>
+</div>
+
+<div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+    <a href="/app/bookmarks" role="button" class="outline{% if read_filter is none %} contrast{% endif %}" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">All</a>
+    <a href="/app/bookmarks?read=false" role="button" class="outline{% if read_filter == false %} contrast{% endif %}" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">Unread</a>
+    <a href="/app/bookmarks?read=true" role="button" class="outline{% if read_filter == true %} contrast{% endif %}" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">Read</a>
+</div>
+
+<div id="bookmarks-list">
+{% for b in bookmarks %}
+{% include "partials/bookmark_row.html" %}
+{% else %}
+<p style="color: var(--pico-muted-color);">No bookmarks saved yet.</p>
+{% endfor %}
+</div>
+
+<dialog id="add-bookmark-dialog">
+    <article>
+        <header>
+            <button aria-label="Close" rel="prev" onclick="this.closest('dialog').close()"></button>
+            <h3>Add Bookmark</h3>
+        </header>
+        <form hx-post="/app/bookmarks" hx-target="#bookmarks-list" hx-swap="afterbegin" hx-on::after-request="this.closest('dialog').close(); this.reset();">
+            <label for="url">URL</label>
+            <input type="url" name="url" id="url" required>
+            <label for="bm-title">Title</label>
+            <input type="text" name="title" id="bm-title">
+            <label for="tags">Tags (comma-separated)</label>
+            <input type="text" name="tags" id="tags">
+            <button type="submit">Save</button>
+        </form>
+    </article>
+</dialog>
+{% endblock %}

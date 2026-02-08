@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Chat - Minion{% endblock %}
+{% block head %}
+<style>
+    #chat-messages {
+        min-height: 400px;
+        max-height: 60vh;
+        overflow-y: auto;
+        border: 1px solid var(--pico-muted-border-color);
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    .chat-msg {
+        padding: 0.5rem 0.75rem;
+        border-radius: 8px;
+        max-width: 85%;
+    }
+    .chat-msg.user {
+        align-self: flex-end;
+        background: var(--pico-primary-background);
+        color: var(--pico-primary-inverse);
+    }
+    .chat-msg.bot {
+        align-self: flex-start;
+        background: var(--pico-card-background-color);
+        border: 1px solid var(--pico-muted-border-color);
+    }
+    .chat-msg.bot p { margin-bottom: 0.25rem; }
+    .chat-msg.bot p:last-child { margin-bottom: 0; }
+    #chat-form { display: flex; gap: 0.5rem; }
+    #chat-form input { flex: 1; margin-bottom: 0; }
+    #chat-form button { width: auto; margin-bottom: 0; }
+</style>
+{% endblock %}
+{% block content %}
+<h2>Chat with Minion</h2>
+
+<div id="chat-messages"></div>
+
+<form id="chat-form" onsubmit="sendMessage(event)">
+    <input type="text" id="chat-input" placeholder="Type a message..." autocomplete="off" required>
+    <button type="submit" id="chat-btn">Send</button>
+</form>
+
+<script>
+    function scrollToBottom() {
+        const el = document.getElementById('chat-messages');
+        el.scrollTop = el.scrollHeight;
+    }
+
+    function appendMessage(content, role) {
+        const el = document.getElementById('chat-messages');
+        const div = document.createElement('div');
+        div.className = 'chat-msg ' + role;
+        div.innerHTML = role === 'bot' ? content : escapeHtml(content);
+        el.appendChild(div);
+        scrollToBottom();
+    }
+
+    function escapeHtml(s) {
+        const div = document.createElement('div');
+        div.textContent = s;
+        return div.innerHTML;
+    }
+
+    async function sendMessage(e) {
+        e.preventDefault();
+        const input = document.getElementById('chat-input');
+        const btn = document.getElementById('chat-btn');
+        const msg = input.value.trim();
+        if (!msg) return;
+
+        appendMessage(msg, 'user');
+        input.value = '';
+        btn.setAttribute('aria-busy', 'true');
+
+        try {
+            const res = await fetch('/api/v1/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({message: msg})
+            });
+            const data = await res.json();
+            // Simple markdown-to-html: bold, italic, code, line breaks
+            let html = escapeHtml(data.response);
+            html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+            html = html.replace(/`(.+?)`/g, '<code>$1</code>');
+            html = html.replace(/\n/g, '<br>');
+            appendMessage(html, 'bot');
+        } catch (err) {
+            appendMessage('Error: ' + err.message, 'bot');
+        } finally {
+            btn.removeAttribute('aria-busy');
+            input.focus();
+        }
+    }
+</script>
+{% endblock %}

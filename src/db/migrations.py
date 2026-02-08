@@ -292,3 +292,33 @@ MIGRATIONS.append(
         _009_add_mood_logs,
     )
 )
+
+
+def _010_add_web_sessions(session: Session) -> None:
+    """Add web_sessions table."""
+    result = session.execute(
+        text("SELECT name FROM sqlite_master WHERE type='table' AND name='web_sessions'")
+    ).fetchone()
+    if not result:
+        session.execute(
+            text("""
+            CREATE TABLE web_sessions (
+                id INTEGER PRIMARY KEY,
+                session_token VARCHAR(255) UNIQUE NOT NULL,
+                telegram_user_id INTEGER NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                expires_at DATETIME NOT NULL
+            )
+        """)
+        )
+        session.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_web_sessions_token ON web_sessions (session_token)"))
+    session.flush()
+
+
+MIGRATIONS.append(
+    (
+        "010_add_web_sessions",
+        "Add web_sessions table for dashboard auth",
+        _010_add_web_sessions,
+    )
+)

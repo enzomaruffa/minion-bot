@@ -1,13 +1,15 @@
-"""FastAPI web server for Google Calendar OAuth callbacks."""
+"""FastAPI web server — OAuth, REST API, and HTMX dashboard."""
 
 import html
 import logging
 import secrets
 import time
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
 from google_auth_oauthlib.flow import Flow
 
 from src.config import settings
@@ -16,7 +18,25 @@ from src.db.queries import get_user_calendar_token, save_user_calendar_token
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Minion OAuth Server")
+app = FastAPI(title="Minion")
+
+# Jinja2 templates
+TEMPLATES_DIR = Path(__file__).parent / "templates"
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+# Mount routers
+from src.web.api import router as api_router  # noqa: E402
+from src.web.auth import router as auth_router  # noqa: E402
+from src.web.views import router as views_router  # noqa: E402
+
+app.include_router(auth_router)
+app.include_router(api_router)
+app.include_router(views_router)
+
+
+# ============================================================================
+# Existing Google OAuth routes
+# ============================================================================
 
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
@@ -27,7 +47,7 @@ _pending_flows: dict[str, tuple[Flow, int, float]] = {}
 
 def _get_redirect_uri() -> str:
     """Get the OAuth redirect URI."""
-    return f"{settings.web_base_url}/auth/callback"
+    return f"{settings.web_base_url}/oauth/callback"
 
 
 def _create_flow() -> Flow:
@@ -44,17 +64,13 @@ def _create_flow() -> Flow:
 
 @app.get("/")
 async def root():
-    """Health check endpoint."""
-    return {"status": "ok", "service": "minion-oauth"}
+    """Root — redirect to dashboard or login."""
+    return RedirectResponse(url="/app/")
 
 
-@app.get("/auth/start/{telegram_user_id}")
+@app.get("/oauth/start/{telegram_user_id}")
 async def start_auth(telegram_user_id: int):
-    """Start OAuth flow - redirects to Google consent screen.
-
-    Args:
-        telegram_user_id: The Telegram user ID to associate with the token.
-    """
+    """Start OAuth flow - redirects to Google consent screen."""
     try:
         flow = _create_flow()
 
@@ -70,7 +86,7 @@ async def start_auth(telegram_user_id: int):
 
         auth_url, _ = flow.authorization_url(
             prompt="select_account consent",
-            access_type="offline",  # Get refresh token
+            access_type="offline",
             state=state,
         )
 
@@ -78,36 +94,21 @@ async def start_auth(telegram_user_id: int):
         return RedirectResponse(url=auth_url)
 
     except FileNotFoundError as e:
-        raise HTTPException(
-            status_code=500,
-            detail="Google credentials not configured. Upload credentials.json first.",
-        ) from e
+        raise HTTPException(status_code=500, detail="Google credentials not configured.") from e
     except Exception as e:
         logger.exception(f"Failed to start OAuth: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@app.get("/auth/callback")
+@app.get("/oauth/callback")
 async def auth_callback(code: str | None = None, state: str | None = None, error: str | None = None):
-    """Handle OAuth callback from Google.
-
-    Args:
-        code: The authorization code from Google.
-        state: The state parameter (telegram_user_id).
-        error: Error message if auth was denied.
-    """
+    """Handle OAuth callback from Google."""
     if error:
         logger.warning(f"OAuth error: {error}")
-        return HTMLResponse(
-            content=_error_page("Authorization was denied", error),
-            status_code=400,
-        )
+        return HTMLResponse(content=_error_page("Authorization was denied", error), status_code=400)
 
     if not code or not state:
-        return HTMLResponse(
-            content=_error_page("Missing parameters", "code and state are required"),
-            status_code=400,
-        )
+        return HTMLResponse(content=_error_page("Missing parameters", "code and state are required"), status_code=400)
 
     flow_entry = _pending_flows.pop(state, None)
     if not flow_entry:
@@ -119,11 +120,9 @@ async def auth_callback(code: str | None = None, state: str | None = None, error
     flow, telegram_user_id, _ = flow_entry
 
     try:
-        # Exchange code for tokens
         flow.fetch_token(code=code)
         creds = flow.credentials
 
-        # Save to database
         with session_scope() as session:
             save_user_calendar_token(
                 session,
@@ -142,28 +141,17 @@ async def auth_callback(code: str | None = None, state: str | None = None, error
 
     except Exception as e:
         logger.exception(f"OAuth callback failed: {e}")
-        return HTMLResponse(
-            content=_error_page("Authorization failed", str(e)),
-            status_code=500,
-        )
+        return HTMLResponse(content=_error_page("Authorization failed", str(e)), status_code=500)
 
 
-@app.get("/auth/status/{telegram_user_id}")
+@app.get("/oauth/status/{telegram_user_id}")
 async def auth_status(telegram_user_id: int):
-    """Check if a user has connected their calendar.
-
-    Args:
-        telegram_user_id: The Telegram user ID to check.
-    """
+    """Check if a user has connected their calendar."""
     with session_scope() as session:
         token = get_user_calendar_token(session, telegram_user_id)
-
         if not token:
             return {"connected": False}
-
-        # Check if token is expired
         is_expired = token.expiry and token.expiry < datetime.now(UTC)
-
         return {
             "connected": True,
             "has_refresh_token": bool(token.refresh_token),
@@ -171,92 +159,42 @@ async def auth_status(telegram_user_id: int):
         }
 
 
+# Legacy redirect: old /auth/start -> /oauth/start
+@app.get("/auth/start/{telegram_user_id}")
+async def legacy_start_auth(telegram_user_id: int):
+    return RedirectResponse(url=f"/oauth/start/{telegram_user_id}")
+
+
+@app.get("/auth/callback")
+async def legacy_callback(code: str | None = None, state: str | None = None, error: str | None = None):
+    return RedirectResponse(url=f"/oauth/callback?code={code}&state={state}&error={error or ''}")
+
+
 def _success_page() -> str:
-    """Generate success HTML page."""
     return """
 <!DOCTYPE html>
-<html>
-<head>
-    <title>Minion - Calendar Connected</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-        .card {
-            background: white;
-            padding: 40px;
-            border-radius: 16px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-            text-align: center;
-            max-width: 400px;
-        }
-        h1 { color: #22c55e; margin-bottom: 16px; }
-        p { color: #666; line-height: 1.6; }
-        .emoji { font-size: 64px; margin-bottom: 16px; }
-    </style>
-</head>
-<body>
-    <div class="card">
-        <div class="emoji">&#10004;</div>
-        <h1>Calendar Connected!</h1>
-        <p>Your Google Calendar is now connected to Minion.</p>
-        <p>You can close this window and return to Telegram.</p>
-    </div>
-</body>
-</html>
-"""
+<html><head><title>Minion - Calendar Connected</title>
+<style>
+body { font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: linear-gradient(135deg, #667eea, #764ba2); }
+.card { background: white; padding: 40px; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); text-align: center; max-width: 400px; }
+h1 { color: #22c55e; } p { color: #666; line-height: 1.6; } .emoji { font-size: 64px; }
+</style></head><body><div class="card"><div class="emoji">&#10004;</div><h1>Calendar Connected!</h1>
+<p>Your Google Calendar is now connected to Minion.</p><p>You can close this window and return to Telegram.</p></div></body></html>"""
 
 
 def _error_page(title: str, detail: str) -> str:
-    """Generate error HTML page."""
     title = html.escape(title)
     detail = html.escape(detail)
     return f"""
 <!DOCTYPE html>
-<html>
-<head>
-    <title>Minion - Error</title>
-    <style>
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }}
-        .card {{
-            background: white;
-            padding: 40px;
-            border-radius: 16px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-            text-align: center;
-            max-width: 400px;
-        }}
-        h1 {{ color: #ef4444; margin-bottom: 16px; }}
-        p {{ color: #666; line-height: 1.6; }}
-        .detail {{ color: #999; font-size: 14px; margin-top: 16px; }}
-        .emoji {{ font-size: 64px; margin-bottom: 16px; }}
-    </style>
-</head>
-<body>
-    <div class="card">
-        <div class="emoji">&#10060;</div>
-        <h1>{title}</h1>
-        <p>Something went wrong connecting your calendar.</p>
-        <p class="detail">{detail}</p>
-        <p>Please try again from Telegram using /auth</p>
-    </div>
-</body>
-</html>
-"""
+<html><head><title>Minion - Error</title>
+<style>
+body {{ font-family: -apple-system, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: linear-gradient(135deg, #667eea, #764ba2); }}
+.card {{ background: white; padding: 40px; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); text-align: center; max-width: 400px; }}
+h1 {{ color: #ef4444; }} p {{ color: #666; line-height: 1.6; }} .emoji {{ font-size: 64px; }}
+</style></head><body><div class="card"><div class="emoji">&#10060;</div><h1>{title}</h1>
+<p>Something went wrong.</p><p style="color: #999; font-size: 14px;">{detail}</p>
+<p>Please try again from Telegram using /auth</p></div></body></html>"""
 
 
 def run_server():

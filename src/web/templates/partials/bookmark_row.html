@@ -1,0 +1,14 @@
+<div class="task-row" id="bookmark-{{ b.id }}">
+    <input type="checkbox" {% if b.read %}checked{% endif %}
+        hx-patch="/app/bookmarks/{{ b.id }}/read?read={{ 'false' if b.read else 'true' }}"
+        hx-target="#bookmark-{{ b.id }}" hx-swap="outerHTML"
+        style="margin: 0; width: auto;" title="Mark as {{ 'unread' if b.read else 'read' }}">
+    <span class="task-title" {% if b.read %}style="text-decoration: line-through; color: var(--pico-muted-color);"{% endif %}>
+        <a href="{{ b.url }}" target="_blank" rel="noopener">{{ b.title or b.url[:60] }}</a>
+        {% if b.domain %}<small style="color: var(--pico-muted-color);"> ({{ b.domain }})</small>{% endif %}
+    </span>
+    {% if b.tags %}<small style="color: var(--pico-muted-color);">{{ b.tags }}</small>{% endif %}
+    <button class="outline secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; width: auto; margin: 0;"
+        hx-delete="/app/bookmarks/{{ b.id }}" hx-target="#bookmark-{{ b.id }}" hx-swap="outerHTML"
+        hx-confirm="Delete bookmark?">&#10005;</button>
+</div>

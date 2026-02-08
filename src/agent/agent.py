@@ -122,29 +122,12 @@ from src.agent.tools import (  # noqa: E402 — must follow tool_logger_hook def
     update_task_tool,
 )
 
-SYSTEM_PROMPT = """You are Minion, a personal assistant bot running on Telegram.
+SYSTEM_PROMPT_BASE = """You are Minion, a personal assistant bot.
 
 Your personality:
 - Friendly and helpful, but concise
 - Proactive - just do reversible actions, confirm after
 - Remember context from the conversation
-
-TELEGRAM FORMATTING (HTML mode):
-Use these HTML tags for formatting:
-- <b>bold</b> — headers, emphasis
-- <i>italic</i> — secondary info, notes
-- <s>strikethrough</s> — completed/cancelled items
-- <code>code</code> — IDs like #12, technical values
-- • for bullet points (unicode, not -)
-
-DO NOT use: Markdown syntax (*bold*, _italic_, `code`)
-Use \n for line breaks, not <br>
-Keep messages under 4096 chars.
-
-Example format:
-<b>📋 Tasks Due Today</b>
-• <code>#12</code> 💼 Buy groceries <i>(Personal)</i>
-• <code>#15</code> 🏃 Call dentist
 
 Your capabilities:
 - Task management: create, update, list, search, and delete tasks
@@ -280,6 +263,40 @@ Always confirm actions taken.
 
 Current timezone: America/Sao_Paulo
 """
+
+FORMAT_HINTS = {
+    "telegram": """
+TELEGRAM FORMATTING (HTML mode):
+Use these HTML tags for formatting:
+- <b>bold</b> — headers, emphasis
+- <i>italic</i> — secondary info, notes
+- <s>strikethrough</s> — completed/cancelled items
+- <code>code</code> — IDs like #12, technical values
+- • for bullet points (unicode, not -)
+
+DO NOT use: Markdown syntax (*bold*, _italic_, `code`)
+Use \\n for line breaks, not <br>
+Keep messages under 4096 chars.
+
+Example format:
+<b>Tasks Due Today</b>
+• <code>#12</code> Buy groceries <i>(Personal)</i>
+• <code>#15</code> Call dentist
+""",
+    "web": """
+MARKDOWN FORMATTING:
+Use standard Markdown for formatting:
+- **bold** for headers and emphasis
+- *italic* for secondary info
+- `code` for IDs like #12
+- - for bullet points
+- ~~strikethrough~~ for completed items
+
+DO NOT use HTML tags.
+""",
+}
+
+SYSTEM_PROMPT = SYSTEM_PROMPT_BASE + FORMAT_HINTS["telegram"]
 
 # Session database for agent memory
 _db: SqliteDb | None = None
@@ -463,15 +480,27 @@ def get_agent() -> Agent:
 SESSION_ID = f"user_{settings.telegram_user_id}"
 
 
-async def chat(message: str) -> str:
-    """Send a message to the agent and get a response."""
+async def chat(message: str, format_hint: str = "telegram") -> str:
+    """Send a message to the agent and get a response.
+
+    Args:
+        message: User message text.
+        format_hint: "telegram" for HTML formatting, "web" for Markdown.
+    """
     logger.info(f"Chat input: {message[:100]}{'...' if len(message) > 100 else ''}")
 
     try:
         agent = get_agent()
+
+        # Prepend format instruction for non-default formats
+        if format_hint != "telegram" and format_hint in FORMAT_HINTS:
+            fmt_msg = f"[FORMAT: {FORMAT_HINTS[format_hint].strip()}]\n\n{message}"
+        else:
+            fmt_msg = message
+
         response = await asyncio.to_thread(
             agent.run,
-            message,
+            fmt_msg,
             user_id=str(settings.telegram_user_id),
             session_id=SESSION_ID,
         )

@@ -1,0 +1,15 @@
+<div class="task-row" id="contact-{{ c.id }}">
+    <span class="task-title">
+        <strong>{{ c.name }}</strong>
+        {% if c.aliases %}<small style="color: var(--pico-muted-color);"> ({{ c.aliases }})</small>{% endif %}
+    </span>
+    {% if c.birthday %}
+    <span style="font-size: 0.85rem; color: var(--pico-muted-color);">
+        {{ c.birthday.strftime('%b %d') }}
+        {% if birthday_info and c.id in birthday_info %} &mdash; {{ birthday_info[c.id] }}{% endif %}
+    </span>
+    {% endif %}
+    <button class="outline secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; width: auto; margin: 0;"
+        hx-delete="/app/contacts/{{ c.id }}" hx-target="#contact-{{ c.id }}" hx-swap="outerHTML"
+        hx-confirm="Delete {{ c.name }}?">&#10005;</button>
+</div>

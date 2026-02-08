@@ -227,6 +227,18 @@ class MoodLog(Base):
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
 
 
+class WebSession(Base):
+    """Browser session for web dashboard auth."""
+
+    __tablename__ = "web_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_token: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    telegram_user_id: Mapped[int] = mapped_column()
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
+    expires_at: Mapped[datetime] = mapped_column()
+
+
 class UserCalendarToken(Base):
     """Stores Google Calendar OAuth tokens per Telegram user."""
 

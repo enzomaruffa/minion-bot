@@ -10,7 +10,7 @@ load_dotenv()
 
 @dataclass
 class Settings:
-    telegram_bot_token: str
+    telegram_bot_token: str | None
     telegram_user_id: int
     openai_api_key: str
     google_credentials_path: Path
@@ -21,6 +21,9 @@ class Settings:
     web_host: str
     web_port: int
     web_base_url: str
+    # Web dashboard
+    web_secret_key: str
+    web_session_ttl_days: int
     # Silverbullet notes
     silverbullet_space_path: Path
     # AI model names
@@ -30,9 +33,9 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
+        import secrets
+
         telegram_bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
-        if not telegram_bot_token:
-            raise ValueError("TELEGRAM_BOT_TOKEN is required")
 
         telegram_user_id = os.environ.get("TELEGRAM_USER_ID")
         if not telegram_user_id:
@@ -54,6 +57,10 @@ class Settings:
         web_port = int(os.environ.get("WEB_PORT", "21125"))
         web_base_url = os.environ.get("WEB_BASE_URL", "https://miniongoogleauth.enzomaruffa.dev")
 
+        # Web dashboard settings
+        web_secret_key = os.environ.get("WEB_SECRET_KEY", secrets.token_urlsafe(32))
+        web_session_ttl_days = int(os.environ.get("WEB_SESSION_TTL_DAYS", "30"))
+
         silverbullet_space_path = Path(os.environ.get("SILVERBULLET_SPACE_PATH", ""))
 
         agent_model = os.environ.get("AGENT_MODEL", "gpt-5.2")
@@ -71,6 +78,8 @@ class Settings:
             web_host=web_host,
             web_port=web_port,
             web_base_url=web_base_url,
+            web_secret_key=web_secret_key,
+            web_session_ttl_days=web_session_ttl_days,
             silverbullet_space_path=silverbullet_space_path,
             agent_model=agent_model,
             memory_model=memory_model,

@@ -23,6 +23,7 @@ from .models import (
     UserCalendarToken,
     UserProfile,
     UserProject,
+    WebSession,
 )
 
 # ============================================================================
@@ -1143,3 +1144,50 @@ def get_mood_stats(session: Session, days: int = 30) -> dict:
         "worst_day": worst.date.strftime("%b %d"),
         "worst_score": worst.score,
     }
+
+
+# ============================================================================
+# WebSession CRUD
+# ============================================================================
+
+
+def create_web_session(session: Session, telegram_user_id: int, token: str, expires_at: datetime) -> WebSession:
+    """Create a new web session."""
+    web_session = WebSession(
+        session_token=token,
+        telegram_user_id=telegram_user_id,
+        expires_at=expires_at,
+    )
+    session.add(web_session)
+    session.flush()
+    session.refresh(web_session)
+    return web_session
+
+
+def get_web_session(session: Session, token: str) -> WebSession | None:
+    """Get a web session by token, only if not expired."""
+    stmt = select(WebSession).where(
+        WebSession.session_token == token,
+        WebSession.expires_at > datetime.now(UTC),
+    )
+    return session.scalars(stmt).first()
+
+
+def delete_web_session(session: Session, token: str) -> bool:
+    """Delete a web session by token."""
+    ws = session.scalars(select(WebSession).where(WebSession.session_token == token)).first()
+    if not ws:
+        return False
+    session.delete(ws)
+    session.flush()
+    return True
+
+
+def cleanup_expired_sessions(session: Session) -> int:
+    """Delete all expired web sessions. Returns count deleted."""
+    from sqlalchemy import delete as sa_delete
+
+    stmt = sa_delete(WebSession).where(WebSession.expires_at <= datetime.now(UTC))
+    result = session.execute(stmt)
+    session.flush()
+    return result.rowcount

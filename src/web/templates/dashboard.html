@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Minion{% endblock %}
+{% block content %}
+<h2>Dashboard</h2>
+
+{% if weather %}
+<article style="padding: 0.75rem 1rem; margin-bottom: 1rem;">
+    {{ weather }}{% if city %} | {{ city }}{% endif %}
+</article>
+{% endif %}
+
+<div class="grid-stats">
+    <div class="stat-card">
+        <div class="value">{{ tasks_due_count }}</div>
+        <div class="label">Due Today</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ overdue_count }}</div>
+        <div class="label">Overdue</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ in_progress_count }}</div>
+        <div class="label">In Progress</div>
+    </div>
+    <div class="stat-card">
+        <div class="value">{{ events_today }}</div>
+        <div class="label">Events Today</div>
+    </div>
+</div>
+
+{% if overdue_tasks %}
+<h4>Overdue</h4>
+{% for t in overdue_tasks %}
+<div class="task-row">
+    <span class="task-id">#{{ t.id }}</span>
+    {% if t.project %}<span>{{ t.project.emoji }}</span>{% endif %}
+    <span class="task-title">{{ t.title }}</span>
+    <span class="badge badge-{{ t.priority.value }}">{{ t.priority.value }}</span>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if tasks_due %}
+<h4>Due Today</h4>
+{% for t in tasks_due %}
+<div class="task-row">
+    <span class="task-id">#{{ t.id }}</span>
+    {% if t.project %}<span>{{ t.project.emoji }}</span>{% endif %}
+    <span class="task-title">{{ t.title }}</span>
+    <span class="badge badge-{{ t.priority.value }}">{{ t.priority.value }}</span>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if events %}
+<h4>Today's Events</h4>
+{% for ev in events %}
+<div class="task-row">
+    <span class="task-id">{{ ev.start_time.strftime('%H:%M') }}</span>
+    <span class="task-title">{{ ev.title }}</span>
+    <span style="color: var(--pico-muted-color); font-size: 0.85rem;">{{ ev.end_time.strftime('%H:%M') }}</span>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if reminders %}
+<h4>Reminders</h4>
+{% for r in reminders %}
+<div class="task-row">
+    <span class="task-id">{{ r.remind_at.strftime('%H:%M') }}</span>
+    <span class="task-title">{{ r.message }}</span>
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

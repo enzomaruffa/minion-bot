@@ -1,0 +1,7 @@
+<div class="task-row">
+    <span class="task-id">{{ m.date.strftime('%b %d') }}</span>
+    <span class="mood-emoji">
+        {% if m.score == 1 %}&#128542;{% elif m.score == 2 %}&#128533;{% elif m.score == 3 %}&#128528;{% elif m.score == 4 %}&#128578;{% else %}&#128516;{% endif %}
+    </span>
+    <span class="task-title">{{ m.score }}/5{% if m.note %} &mdash; {{ m.note }}{% endif %}</span>
+</div>

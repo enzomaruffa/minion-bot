@@ -12,7 +12,6 @@ from src.scheduler.jobs import (
     proactive_intelligence,
     sync_calendar,
 )
-from src.telegram.bot import create_application, register_commands
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -44,9 +43,16 @@ def register_jobs() -> None:
     # Recurring task generation every 5 minutes
     add_interval_job(generate_recurring_tasks, minutes=5, job_id="recurring_tasks")
 
+    # Expired web session cleanup daily at 3 AM
+    from src.web.auth import cleanup_expired_sessions_job
+
+    add_cron_job(cleanup_expired_sessions_job, hour=3, minute=0, job_id="session_cleanup")
+
 
 async def post_init(application) -> None:
     """Called after the application is initialized with event loop running."""
+    from src.telegram.bot import register_commands
+
     logger.info("Registering bot commands...")
     await register_commands(application)
 
@@ -77,15 +83,31 @@ def main() -> None:
     logger.info("Registering scheduled jobs...")
     register_jobs()
 
-    logger.info("Starting OAuth web server...")
+    logger.info("Starting web server...")
     start_web_server()
 
-    logger.info("Starting Minion bot...")
-    application = create_application()
-    application.post_init = post_init
-    application.post_shutdown = post_shutdown
+    if settings.telegram_bot_token:
+        from src.telegram.bot import create_application, register_notification_handler
 
-    application.run_polling(allowed_updates=["message"])
+        logger.info("Registering Telegram notification handler...")
+        register_notification_handler()
+
+        logger.info("Starting Minion bot...")
+        application = create_application()
+        application.post_init = post_init
+        application.post_shutdown = post_shutdown
+
+        application.run_polling(allowed_updates=["message"])
+    else:
+        logger.info("No TELEGRAM_BOT_TOKEN — running in web-only mode")
+        start_scheduler()
+        try:
+            import time
+
+            while True:
+                time.sleep(3600)
+        except KeyboardInterrupt:
+            shutdown_scheduler()
 
 
 if __name__ == "__main__":

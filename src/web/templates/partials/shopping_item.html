@@ -1,0 +1,16 @@
+<div class="task-row" id="item-{{ item.id }}">
+    <input type="checkbox" {% if item.checked %}checked{% endif %}
+        hx-patch="/app/shopping/items/{{ item.id }}/check?checked={{ 'false' if item.checked else 'true' }}"
+        hx-target="#item-{{ item.id }}" hx-swap="outerHTML"
+        style="margin: 0; width: auto;">
+    <span class="task-title" {% if item.checked %}style="text-decoration: line-through; color: var(--pico-muted-color);"{% endif %}>
+        {{ item.name }}
+        {% if item.quantity_target > 1 %}
+        <small>({{ item.quantity_purchased }}/{{ item.quantity_target }})</small>
+        {% endif %}
+    </span>
+    {% if item.recipient %}<small style="color: var(--pico-muted-color);">for {{ item.recipient }}</small>{% endif %}
+    <button class="outline secondary" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; width: auto; margin: 0;"
+        hx-delete="/app/shopping/items/{{ item.id }}" hx-target="#item-{{ item.id }}" hx-swap="outerHTML"
+        hx-confirm="Remove {{ item.name }}?">&#10005;</button>
+</div>

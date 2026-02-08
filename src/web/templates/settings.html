@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Settings - Minion{% endblock %}
+{% block content %}
+<h2>Settings</h2>
+
+{% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+
+<form hx-patch="/app/settings" hx-target="body">
+    <label for="display_name">Display Name</label>
+    <input type="text" name="display_name" id="display_name" value="{{ profile.display_name or '' }}">
+
+    <label for="city">City</label>
+    <input type="text" name="city" id="city" value="{{ profile.city or '' }}">
+
+    <label for="timezone_str">Timezone</label>
+    <input type="text" name="timezone_str" id="timezone_str" value="{{ profile.timezone_str or '' }}" placeholder="America/Sao_Paulo">
+
+    <div class="grid">
+        <div>
+            <label for="work_start_hour">Work Start Hour (0-23)</label>
+            <input type="number" name="work_start_hour" id="work_start_hour" min="0" max="23" value="{{ profile.work_start_hour if profile.work_start_hour is not none else '' }}">
+        </div>
+        <div>
+            <label for="work_end_hour">Work End Hour (0-23)</label>
+            <input type="number" name="work_end_hour" id="work_end_hour" min="0" max="23" value="{{ profile.work_end_hour if profile.work_end_hour is not none else '' }}">
+        </div>
+    </div>
+
+    <button type="submit">Save</button>
+</form>
+{% endblock %}

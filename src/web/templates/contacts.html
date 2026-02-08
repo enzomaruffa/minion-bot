@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Contacts - Minion{% endblock %}
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center;">
+    <h2>Contacts</h2>
+    <button onclick="document.getElementById('add-contact-dialog').showModal()">+ New Contact</button>
+</div>
+
+<div id="contacts-list">
+{% for c in contacts %}
+{% include "partials/contact_row.html" %}
+{% else %}
+<p style="color: var(--pico-muted-color);">No contacts yet.</p>
+{% endfor %}
+</div>
+
+<dialog id="add-contact-dialog">
+    <article>
+        <header>
+            <button aria-label="Close" rel="prev" onclick="this.closest('dialog').close()"></button>
+            <h3>New Contact</h3>
+        </header>
+        <form hx-post="/app/contacts" hx-target="#contacts-list" hx-swap="afterbegin" hx-on::after-request="this.closest('dialog').close(); this.reset();">
+            <label for="name">Name</label>
+            <input type="text" name="name" id="name" required>
+            <label for="aliases">Aliases (comma-separated)</label>
+            <input type="text" name="aliases" id="aliases">
+            <label for="birthday">Birthday</label>
+            <input type="date" name="birthday" id="birthday">
+            <label for="notes">Notes</label>
+            <textarea name="notes" id="notes" rows="2"></textarea>
+            <button type="submit">Add Contact</button>
+        </form>
+    </article>
+</dialog>
+{% endblock %}

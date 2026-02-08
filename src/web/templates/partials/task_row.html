@@ -1,0 +1,13 @@
+<div class="task-row" id="task-{{ t.id }}">
+    <span class="task-id">#{{ t.id }}</span>
+    {% if t.project %}<span>{{ t.project.emoji }}</span>{% endif %}
+    {% if t.recurrence_rule %}<span title="Recurring">&#128260;</span>{% endif %}
+    <a href="/app/tasks/{{ t.id }}" class="task-title" style="text-decoration: none; color: inherit;">
+        {% if t.status.value == 'done' %}<s>{{ t.title }}</s>{% else %}{{ t.title }}{% endif %}
+    </a>
+    <span class="badge badge-{{ t.status.value }}">{{ t.status.value }}</span>
+    <span class="badge badge-{{ t.priority.value }}">{{ t.priority.value }}</span>
+    {% if t.due_date %}
+    <span style="font-size: 0.8rem; color: var(--pico-muted-color);">{{ t.due_date.strftime('%b %d') }}</span>
+    {% endif %}
+</div>

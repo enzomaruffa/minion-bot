@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minion - Login</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <style>
+        body {
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .login-card {
+            background: white; padding: 2.5rem; border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            max-width: 400px; width: 100%;
+        }
+        .login-card h1 { text-align: center; margin-bottom: 0.5rem; }
+        .login-card p.subtitle { text-align: center; color: #666; margin-bottom: 2rem; }
+        #step-2 { display: none; }
+        .error { color: #dc2626; font-size: 0.9rem; margin-top: 0.5rem; }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <h1>Minion</h1>
+        <p class="subtitle">Web Dashboard</p>
+
+        <div id="step-1">
+            <label for="user_id">Telegram User ID</label>
+            <input type="number" id="user_id" placeholder="Enter your Telegram user ID" required>
+            <button id="btn-request" onclick="requestCode()">Send Login Code</button>
+            <p id="error-1" class="error" style="display:none"></p>
+        </div>
+
+        <div id="step-2">
+            <p>A 6-digit code was sent to your Telegram. Enter it below:</p>
+            <label for="code">Code</label>
+            <input type="text" id="code" placeholder="123456" maxlength="6" required>
+            <button id="btn-verify" onclick="verifyCode()">Verify</button>
+            <p id="error-2" class="error" style="display:none"></p>
+        </div>
+    </div>
+
+    <script>
+        async function requestCode() {
+            const uid = document.getElementById('user_id').value;
+            const err = document.getElementById('error-1');
+            const btn = document.getElementById('btn-request');
+            err.style.display = 'none';
+            btn.setAttribute('aria-busy', 'true');
+
+            try {
+                const res = await fetch('/auth/request-code', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({telegram_user_id: parseInt(uid)})
+                });
+                if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.detail || 'Request failed');
+                }
+                document.getElementById('step-1').style.display = 'none';
+                document.getElementById('step-2').style.display = 'block';
+                document.getElementById('code').focus();
+            } catch (e) {
+                err.textContent = e.message;
+                err.style.display = 'block';
+            } finally {
+                btn.removeAttribute('aria-busy');
+            }
+        }
+
+        async function verifyCode() {
+            const uid = document.getElementById('user_id').value;
+            const code = document.getElementById('code').value;
+            const err = document.getElementById('error-2');
+            const btn = document.getElementById('btn-verify');
+            err.style.display = 'none';
+            btn.setAttribute('aria-busy', 'true');
+
+            try {
+                const res = await fetch('/auth/verify-code', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({telegram_user_id: parseInt(uid), code: code})
+                });
+                if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.detail || 'Verification failed');
+                }
+                window.location.href = '/app/';
+            } catch (e) {
+                err.textContent = e.message;
+                err.style.display = 'block';
+            } finally {
+                btn.removeAttribute('aria-busy');
+            }
+        }
+
+        document.getElementById('code')?.addEventListener('keydown', e => {
+            if (e.key === 'Enter') verifyCode();
+        });
+        document.getElementById('user_id')?.addEventListener('keydown', e => {
+            if (e.key === 'Enter') requestCode();
+        });
+    </script>
+</body>
+</html>

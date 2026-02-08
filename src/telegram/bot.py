@@ -203,7 +203,7 @@ def create_application() -> Application:
     return application
 
 
-async def send_message(text: str) -> None:
+async def send_message(text: str, parse_mode: str = "HTML") -> None:
     """Send a proactive message to the user."""
     from telegram import Bot
 
@@ -212,7 +212,7 @@ async def send_message(text: str) -> None:
         await bot.send_message(
             chat_id=settings.telegram_user_id,
             text=text,
-            parse_mode="HTML",
+            parse_mode=parse_mode,
         )
     except BadRequest as e:
         if "Can't parse entities" in str(e):
@@ -223,6 +223,13 @@ async def send_message(text: str) -> None:
             )
         else:
             raise
+
+
+def register_notification_handler() -> None:
+    """Register send_message as a notification handler."""
+    from src.notifications import register_handler
+
+    register_handler(send_message)
 
 
 # Error notification rate limiting (bounded to prevent memory leak)

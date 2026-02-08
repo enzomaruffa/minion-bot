@@ -19,7 +19,7 @@ from src.db.queries import (
     mark_reminder_delivered,
     update_task,
 )
-from src.telegram.bot import send_message
+from src.notifications import notify
 from src.utils import days_until_birthday, format_birthday_proximity
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ async def morning_summary() -> None:
     try:
         agenda = get_agenda()
         message = f"Good morning! Here's your agenda for today:\n\n{agenda}"
-        await send_message(message)
+        await notify(message)
         logger.info("Morning summary sent")
     except Exception as e:
         logger.exception(f"Error sending morning summary: {e}")
@@ -95,7 +95,7 @@ async def eod_review() -> None:
                 lines.append("")
                 lines.append("How was your day? Rate 1-5 (😞😕😐🙂😄)")
 
-        await send_message("\n".join(lines))
+        await notify("\n".join(lines))
         logger.info("EOD review sent")
     except Exception as e:
         logger.exception(f"Error sending EOD review: {e}")
@@ -116,7 +116,7 @@ async def deliver_reminders() -> None:
                     if reminder.task_id:
                         message += f" (task #{reminder.task_id})"
 
-                    await send_message(message)
+                    await notify(message)
                     mark_reminder_delivered(session, reminder.id)
                     logger.info(f"Delivered reminder #{reminder.id}")
                 except Exception as e:
@@ -195,7 +195,7 @@ async def proactive_intelligence() -> None:
         # Send combined message if there are any nudges
         if messages:
             combined = "Proactive Check-in\n\n" + "\n\n".join(messages)
-            await send_message(combined)
+            await notify(combined)
             logger.info(f"Sent proactive intelligence message with {len(messages)} nudges")
         else:
             logger.info("No proactive nudges needed")

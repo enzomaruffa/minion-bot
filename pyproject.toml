@@ -17,6 +17,9 @@ dependencies = [
     "dateparser>=1.2.0",
     "uvicorn>=0.34.0",
     "geopy>=2.4.1",
+    "jinja2>=3.1.6",
+    "python-multipart>=0.0.21",
+    "itsdangerous>=2.2.0",
 ]
 
 [build-system]
@@ -56,6 +59,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "src/db/queries.py" = ["SIM108"]  # Ternary not always clearer for query builders
+"src/web/server.py" = ["E501"]  # HTML string literals
 
 [tool.ruff.lint.isort]
 known-first-party = ["src"]

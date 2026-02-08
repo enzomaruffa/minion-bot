@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Calendar - Minion{% endblock %}
+{% block content %}
+<h2>Calendar</h2>
+
+<div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; align-items: center;">
+    <a href="/app/calendar?days=1" role="button" class="outline" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">Today</a>
+    <a href="/app/calendar?days=3" role="button" class="outline" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">3 Days</a>
+    <a href="/app/calendar?days=7" role="button" class="outline{% if days == 7 %} contrast{% endif %}" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">Week</a>
+    <a href="/app/calendar?days=14" role="button" class="outline" style="padding: 0.3rem 0.8rem; font-size: 0.85rem;">2 Weeks</a>
+</div>
+
+{% if events %}
+{% set ns = namespace(current_date='') %}
+{% for ev in events %}
+    {% set ev_date = ev.start_time.strftime('%A, %b %d') %}
+    {% if ev_date != ns.current_date %}
+        {% set ns.current_date = ev_date %}
+        <h5 style="margin-top: 1rem; margin-bottom: 0.5rem;">{{ ev_date }}</h5>
+    {% endif %}
+    <div class="task-row">
+        <span class="task-id">{{ ev.start_time.strftime('%H:%M') }}</span>
+        <span class="task-title">{{ ev.title }}</span>
+        <span style="font-size: 0.85rem; color: var(--pico-muted-color);">{{ ev.end_time.strftime('%H:%M') }}</span>
+    </div>
+{% endfor %}
+{% else %}
+<p style="color: var(--pico-muted-color);">No events in this period.</p>
+{% endif %}
+{% endblock %}

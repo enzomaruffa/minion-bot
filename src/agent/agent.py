@@ -18,7 +18,7 @@ def tool_logger_hook(
     function_name: str, function_call: Callable, arguments: Dict[str, Any]
 ) -> Any:
     """Log tool calls with execution time and send error notifications."""
-    logger.info(f"Tool call: {function_name}({arguments})")
+    logger.info(f"Tool call: {function_name}({list(arguments.keys())})")
     start_time = time.time()
     
     try:
@@ -243,7 +243,7 @@ def get_db() -> SqliteDb:
 def get_memory_manager() -> MemoryManager:
     """Create a memory manager with custom instructions."""
     return MemoryManager(
-        model=OpenAIChat(id="gpt-5-mini", api_key=settings.openai_api_key),
+        model=OpenAIChat(id=settings.memory_model, api_key=settings.openai_api_key),
         db=get_db(),
         additional_instructions="""
         Focus on remembering:
@@ -286,7 +286,7 @@ def create_agent() -> Agent:
     logger.info("Creating Minion agent...")
     return Agent(
         model=OpenAIChat(
-            id="gpt-5.2",
+            id=settings.agent_model,
             api_key=settings.openai_api_key,
         ),
         tools=[
@@ -395,7 +395,8 @@ async def chat(message: str) -> str:
     
     try:
         agent = get_agent()
-        response = agent.run(
+        response = await asyncio.to_thread(
+            agent.run,
             message,
             user_id=str(settings.telegram_user_id),
             session_id=SESSION_ID,

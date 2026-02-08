@@ -14,16 +14,20 @@ _SessionLocal = None
 @contextmanager
 def session_scope() -> Generator[Session, None, None]:
     """Provide a transactional scope around a series of operations.
-    
+
     Usage:
         with session_scope() as session:
             # use session
-    
-    Session is automatically closed on exit, even if an exception occurs.
+
+    Commits on success, rolls back on error, always closes.
     """
     session = get_session()
     try:
         yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
@@ -40,14 +44,14 @@ def init_database(database_path: Path) -> None:
     
     # Run pending migrations
     from .migrations import run_migrations
-    session = _SessionLocal()
-    run_migrations(session)
-    
+    with session_scope() as session:
+        run_migrations(session)
+
     # Seed default projects and shopping lists
     from .queries import seed_default_projects, seed_default_shopping_lists
-    seed_default_projects(session)
-    seed_default_shopping_lists(session)
-    session.close()
+    with session_scope() as session:
+        seed_default_projects(session)
+        seed_default_shopping_lists(session)
 
 
 def get_session() -> Session:

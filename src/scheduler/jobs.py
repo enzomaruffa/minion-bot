@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 
 from src.agent.tools.agenda import get_agenda
 from src.config import settings
+from src.utils import days_until_birthday, format_birthday_proximity
 from src.db import session_scope
 from src.db.models import TaskPriority, TaskStatus
 from src.db.queries import (
@@ -178,20 +179,8 @@ async def proactive_intelligence() -> None:
                 lines = ["Upcoming Birthdays"]
                 for contact in upcoming_contacts:
                     if contact.birthday:
-                        bday = contact.birthday.date() if hasattr(contact.birthday, 'date') else contact.birthday
-                        this_year_bday = bday.replace(year=today.year)
-                        if this_year_bday < today:
-                            this_year_bday = bday.replace(year=today.year + 1)
-                        days_until = (this_year_bday - today).days
-
-                        if days_until == 0:
-                            when = "TODAY!"
-                        elif days_until == 1:
-                            when = "tomorrow"
-                        else:
-                            when = f"in {days_until} days"
-
-                        lines.append(f"  {contact.name} - {when}")
+                        d = days_until_birthday(contact.birthday, today)
+                        lines.append(f"  {contact.name} - {format_birthday_proximity(d)}")
                 messages.append("\n".join(lines))
 
         # Send combined message if there are any nudges
@@ -204,3 +193,17 @@ async def proactive_intelligence() -> None:
             
     except Exception as e:
         logger.exception(f"Error in proactive intelligence job: {e}")
+
+
+async def sync_calendar() -> None:
+    """Sync Google Calendar events to local database."""
+    logger.info("Running calendar sync job")
+    try:
+        from src.integrations.calendar import sync_events
+
+        now = datetime.now(settings.timezone).replace(tzinfo=None)
+        end = now + timedelta(days=14)
+        count = sync_events(now, end)
+        logger.info(f"Calendar sync complete: {count} events synced")
+    except Exception as e:
+        logger.exception(f"Error in calendar sync job: {e}")

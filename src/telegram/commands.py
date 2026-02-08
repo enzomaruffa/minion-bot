@@ -8,6 +8,7 @@ from telegram.ext import ContextTypes
 from src.agent.tools import get_agenda, list_tasks, list_projects_tool, list_reminders
 from src.config import settings
 from src.db import session_scope
+from src.utils import days_until_birthday, format_birthday_proximity
 from src.db.models import ShoppingListType
 from src.db.queries import (
     list_calendar_events_range,
@@ -16,14 +17,9 @@ from src.db.queries import (
     list_upcoming_birthdays,
 )
 from src.integrations.calendar import (
-    get_auth_url,
-    complete_auth,
     is_calendar_connected,
     is_calendar_connected_for_user,
 )
-
-# Track if we're waiting for an auth code
-_awaiting_auth_code = False
 
 # Track last command output for agent context injection
 _last_command_context: dict | None = None
@@ -141,28 +137,6 @@ async def auth_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     )
 
 
-async def handle_auth_code(code: str) -> str:
-    """Process an authorization code. Returns response message."""
-    global _awaiting_auth_code
-    
-    if complete_auth(code.strip()):
-        _awaiting_auth_code = False
-        return "Google Calendar connected successfully!"
-    else:
-        return "Invalid code. Try /auth again."
-
-
-def is_awaiting_auth_code() -> bool:
-    """Check if we're waiting for an auth code."""
-    return _awaiting_auth_code
-
-
-def cancel_auth() -> None:
-    """Cancel pending auth."""
-    global _awaiting_auth_code
-    _awaiting_auth_code = False
-
-
 def get_last_command_context() -> dict | None:
     """Get the last command context if recent (< 5 min)."""
     global _last_command_context
@@ -226,22 +200,12 @@ async def birthdays_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
         for contact in contacts:
             if contact.birthday:
+                d = days_until_birthday(contact.birthday, today)
                 bday = contact.birthday.date() if hasattr(contact.birthday, 'date') else contact.birthday
                 this_year_bday = bday.replace(year=today.year)
                 if this_year_bday < today:
                     this_year_bday = bday.replace(year=today.year + 1)
-                days_until = (this_year_bday - today).days
-
-                if days_until == 0:
-                    when = "TODAY!"
-                elif days_until == 1:
-                    when = "tomorrow"
-                elif days_until <= 7:
-                    when = f"in {days_until} days"
-                else:
-                    when = f"in {days_until} days"
-
-                lines.append(f"  {contact.name} - {this_year_bday.strftime('%b %d')} ({when})")
+                lines.append(f"  {contact.name} - {this_year_bday.strftime('%b %d')} ({format_birthday_proximity(d)})")
 
         await update.message.reply_text("\n".join(lines))
 

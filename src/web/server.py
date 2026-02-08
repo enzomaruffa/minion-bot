@@ -1,8 +1,11 @@
 """FastAPI web server for Google Calendar OAuth callbacks."""
 
+import html
 import json
 import logging
-from datetime import datetime
+import secrets
+import time
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -19,8 +22,9 @@ app = FastAPI(title="Minion OAuth Server")
 
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
-# Store pending flows by state (which encodes telegram_user_id)
-_pending_flows: dict[str, Flow] = {}
+# Store pending flows by state: state -> (flow, telegram_user_id, created_at)
+_FLOW_TTL = 600  # 10 minutes
+_pending_flows: dict[str, tuple[Flow, int, float]] = {}
 
 
 def _get_redirect_uri() -> str:
@@ -56,9 +60,15 @@ async def start_auth(telegram_user_id: int):
     try:
         flow = _create_flow()
 
-        # Use telegram_user_id as state to track the user through OAuth
-        state = str(telegram_user_id)
-        _pending_flows[state] = flow
+        # Purge expired flows
+        now = time.time()
+        expired = [k for k, (_, _, t) in _pending_flows.items() if now - t > _FLOW_TTL]
+        for k in expired:
+            del _pending_flows[k]
+
+        # Generate unpredictable state token
+        state = secrets.token_urlsafe(32)
+        _pending_flows[state] = (flow, telegram_user_id, now)
 
         auth_url, _ = flow.authorization_url(
             prompt="select_account consent",
@@ -101,19 +111,19 @@ async def auth_callback(code: str | None = None, state: str | None = None, error
             status_code=400,
         )
 
-    flow = _pending_flows.pop(state, None)
-    if not flow:
+    flow_entry = _pending_flows.pop(state, None)
+    if not flow_entry:
         return HTMLResponse(
             content=_error_page("Session expired", "Please start the auth process again from Telegram"),
             status_code=400,
         )
 
+    flow, telegram_user_id, _ = flow_entry
+
     try:
         # Exchange code for tokens
         flow.fetch_token(code=code)
         creds = flow.credentials
-
-        telegram_user_id = int(state)
 
         # Save to database
         with session_scope() as session:
@@ -154,7 +164,7 @@ async def auth_status(telegram_user_id: int):
             return {"connected": False}
 
         # Check if token is expired
-        is_expired = token.expiry and token.expiry < datetime.utcnow()
+        is_expired = token.expiry and token.expiry < datetime.now(timezone.utc)
 
         return {
             "connected": True,
@@ -207,6 +217,8 @@ def _success_page() -> str:
 
 def _error_page(title: str, detail: str) -> str:
     """Generate error HTML page."""
+    title = html.escape(title)
+    detail = html.escape(detail)
     return f"""
 <!DOCTYPE html>
 <html>

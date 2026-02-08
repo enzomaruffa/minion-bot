@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 import dateparser
@@ -60,3 +60,22 @@ def format_date(dt: Optional[datetime], include_time: bool = False) -> str:
     if include_time:
         return dt.strftime("%b %d %H:%M")
     return dt.strftime("%b %d")
+
+
+def days_until_birthday(birthday: date | datetime, today: date) -> int:
+    """Calculate the number of days until the next occurrence of a birthday."""
+    bday = birthday.date() if isinstance(birthday, datetime) else birthday
+    this_year_bday = bday.replace(year=today.year)
+    if this_year_bday < today:
+        this_year_bday = bday.replace(year=today.year + 1)
+    return (this_year_bday - today).days
+
+
+def format_birthday_proximity(days: int) -> str:
+    """Return a human-readable string for how close a birthday is."""
+    if days == 0:
+        return "TODAY!"
+    elif days == 1:
+        return "tomorrow"
+    else:
+        return f"in {days} days"

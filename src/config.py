@@ -23,6 +23,10 @@ class Settings:
     web_base_url: str
     # Silverbullet notes
     silverbullet_space_path: Path
+    # AI model names
+    agent_model: str
+    memory_model: str
+    vision_model: str
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -60,6 +64,10 @@ class Settings:
             os.environ.get("SILVERBULLET_SPACE_PATH", "")
         )
 
+        agent_model = os.environ.get("AGENT_MODEL", "gpt-5.2")
+        memory_model = os.environ.get("MEMORY_MODEL", "gpt-5-mini")
+        vision_model = os.environ.get("VISION_MODEL", "gpt-5.2")
+
         return cls(
             telegram_bot_token=telegram_bot_token,
             telegram_user_id=int(telegram_user_id),
@@ -72,6 +80,9 @@ class Settings:
             web_port=web_port,
             web_base_url=web_base_url,
             silverbullet_space_path=silverbullet_space_path,
+            agent_model=agent_model,
+            memory_model=memory_model,
+            vision_model=vision_model,
         )
 
 

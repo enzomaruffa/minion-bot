@@ -16,12 +16,37 @@ MAX_NOTE_SIZE = 50 * 1024  # 50KB
 MAX_SEARCH_RESULTS = 20
 
 
+def _atomic_write(path: Path, content: str) -> None:
+    """Write content to a file atomically via a temp file."""
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".md.tmp")
+    try:
+        os.write(fd, content.encode("utf-8"))
+        os.close(fd)
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+
+
 def _get_space_path() -> Path | None:
     """Get the configured space path, or None if not configured."""
     path = settings.silverbullet_space_path
     if str(path) in ("", ".") or not path.is_dir():
         return None
     return path.resolve()
+
+
+def _safe_resolve(space: Path, subpath: str) -> Path:
+    """Resolve a subpath within the space directory, raising on traversal."""
+    target = (space / subpath).resolve()
+    if not str(target).startswith(str(space.resolve())):
+        raise ValueError("Invalid path")
+    return target
 
 
 def _note_path(name: str) -> Path:
@@ -44,13 +69,7 @@ def _note_path(name: str) -> Path:
     if not name.endswith(".md"):
         name = name + ".md"
 
-    target = (space / name).resolve()
-
-    # Path traversal protection
-    if not str(target).startswith(str(space.resolve())):
-        raise ValueError("Invalid note path")
-
-    return target
+    return _safe_resolve(space, name)
 
 
 def note_exists(name: str) -> bool:
@@ -106,21 +125,7 @@ def create_note(name: str, content: str) -> None:
 
     # Auto-create parent directories
     path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Atomic write
-    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".md.tmp")
-    try:
-        os.write(fd, content.encode("utf-8"))
-        os.close(fd)
-        os.replace(tmp, path)
-    except Exception:
-        try:
-            os.close(fd)
-        except OSError:
-            pass
-        if os.path.exists(tmp):
-            os.unlink(tmp)
-        raise
+    _atomic_write(path, content)
 
 
 def update_note(name: str, content: str) -> None:
@@ -137,20 +142,7 @@ def update_note(name: str, content: str) -> None:
     if not path.is_file():
         raise ValueError(f"Note not found: {name}")
 
-    # Atomic write
-    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".md.tmp")
-    try:
-        os.write(fd, content.encode("utf-8"))
-        os.close(fd)
-        os.replace(tmp, path)
-    except Exception:
-        try:
-            os.close(fd)
-        except OSError:
-            pass
-        if os.path.exists(tmp):
-            os.unlink(tmp)
-        raise
+    _atomic_write(path, content)
 
 
 def append_to_note(name: str, content: str) -> None:
@@ -170,21 +162,7 @@ def append_to_note(name: str, content: str) -> None:
     existing = path.read_text(encoding="utf-8", errors="replace")
     separator = "\n" if existing and not existing.endswith("\n") else ""
     new_content = existing + separator + content
-
-    # Atomic write
-    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".md.tmp")
-    try:
-        os.write(fd, new_content.encode("utf-8"))
-        os.close(fd)
-        os.replace(tmp, path)
-    except Exception:
-        try:
-            os.close(fd)
-        except OSError:
-            pass
-        if os.path.exists(tmp):
-            os.unlink(tmp)
-        raise
+    _atomic_write(path, new_content)
 
 
 def list_notes(folder: str = "") -> tuple[list[str], list[str]]:
@@ -203,12 +181,7 @@ def list_notes(folder: str = "") -> tuple[list[str], list[str]]:
     if space is None:
         raise ValueError("Notes not configured")
 
-    if folder:
-        target = (space / folder).resolve()
-        if not str(target).startswith(str(space.resolve())):
-            raise ValueError("Invalid folder path")
-    else:
-        target = space
+    target = _safe_resolve(space, folder) if folder else space
 
     if not target.is_dir():
         raise ValueError(f"Folder not found: {folder}")
@@ -243,12 +216,7 @@ def list_notes_recursive(folder: str = "") -> list[str]:
     if space is None:
         raise ValueError("Notes not configured")
 
-    if folder:
-        target = (space / folder).resolve()
-        if not str(target).startswith(str(space.resolve())):
-            raise ValueError("Invalid folder path")
-    else:
-        target = space
+    target = _safe_resolve(space, folder) if folder else space
 
     if not target.is_dir():
         raise ValueError(f"Folder not found: {folder}")
@@ -277,12 +245,7 @@ def search_notes(query: str, folder: str = "") -> list[tuple[str, str]]:
     if space is None:
         raise ValueError("Notes not configured")
 
-    if folder:
-        target = (space / folder).resolve()
-        if not str(target).startswith(str(space.resolve())):
-            raise ValueError("Invalid folder path")
-    else:
-        target = space
+    target = _safe_resolve(space, folder) if folder else space
 
     query_lower = query.lower()
     results: list[tuple[str, str]] = []
@@ -324,12 +287,7 @@ def search_notes_by_title(query: str, folder: str = "") -> list[str]:
     if space is None:
         raise ValueError("Notes not configured")
 
-    if folder:
-        target = (space / folder).resolve()
-        if not str(target).startswith(str(space.resolve())):
-            raise ValueError("Invalid folder path")
-    else:
-        target = space
+    target = _safe_resolve(space, folder) if folder else space
 
     query_lower = query.lower()
     results: list[str] = []

@@ -17,7 +17,7 @@ from src.db.queries import (
     search_tasks,
     update_task,
     list_attachments_by_task,
-)
+)  # get_subtasks still used in get_task_details
 
 
 def add_tasks(tasks: list[dict]) -> str:
@@ -78,8 +78,8 @@ def add_tasks(tasks: list[dict]) -> str:
             created_ids.append(task.id)
 
     if len(created_ids) == 1:
-        return f"Created task `#{created_ids[0]}`"
-    return f"Created {len(created_ids)} tasks: {', '.join(f'`#{id}`' for id in created_ids)}"
+        return f"Created task <code>#{created_ids[0]}</code>"
+    return f"Created {len(created_ids)} tasks: {', '.join(f'<code>#{id}</code>' for id in created_ids)}"
 
 
 def update_task_tool(
@@ -139,9 +139,9 @@ def update_task_tool(
         )
 
         if not task:
-            return f"Task `#{task_id}` not found"
+            return f"Task <code>#{task_id}</code> not found"
 
-        return f"Updated `#{task_id}` _{task.title}_"
+        return f"Updated <code>#{task_id}</code> <i>{task.title}</i>"
 
 
 def complete_task(task_id: int) -> str:
@@ -157,9 +157,9 @@ def complete_task(task_id: int) -> str:
         task = update_task(session, task_id, status=TaskStatus.DONE)
 
         if not task:
-            return f"Task `#{task_id}` not found"
+            return f"Task <code>#{task_id}</code> not found"
 
-        return f"✓ Completed `#{task_id}` _{task.title}_"
+        return f"✓ Completed <code>#{task_id}</code> <i>{task.title}</i>"
 
 
 def get_overdue_tasks() -> str:
@@ -201,12 +201,19 @@ def _format_task_line(task: Task, indent: int = 0) -> str:
     return f"{prefix}{status_icon} #{task.id} {project_emoji}{task.title}{contact_info}{due}{overdue_badge}"
 
 
-def _format_task_with_subtasks(task: Task, session, indent: int = 0) -> list[str]:
-    """Format a task and its subtasks recursively."""
+def _build_task_tree(tasks: list[Task]) -> dict[int | None, list[Task]]:
+    """Group tasks by parent_id for in-memory tree traversal."""
+    tree: dict[int | None, list[Task]] = {}
+    for task in tasks:
+        tree.setdefault(task.parent_id, []).append(task)
+    return tree
+
+
+def _format_task_with_subtasks(task: Task, tree: dict[int | None, list[Task]], indent: int = 0) -> list[str]:
+    """Format a task and its subtasks from a pre-built tree."""
     lines = [_format_task_line(task, indent)]
-    subtasks = get_subtasks(session, task.id)
-    for subtask in subtasks:
-        lines.extend(_format_task_with_subtasks(subtask, session, indent + 1))
+    for subtask in tree.get(task.id, []):
+        lines.extend(_format_task_with_subtasks(subtask, tree, indent + 1))
     return lines
 
 
@@ -236,14 +243,17 @@ def list_tasks(
                 project_id = proj.id
 
         if include_subtasks:
-            # Get only root tasks (no parent) and show hierarchy
-            tasks = list_tasks_by_status(session, status_enum, root_only=True, project_id=project_id)
-            if not tasks:
+            # Load all matching tasks in one query, build tree in memory
+            all_tasks = list_tasks_by_status(session, status_enum, project_id=project_id)
+            if not all_tasks:
                 return "No tasks found. Try saying 'remind me to...' to create one!"
 
+            tree = _build_task_tree(list(all_tasks))
+            root_tasks = [t for t in all_tasks if t.parent_id is None]
+
             lines = []
-            for task in tasks:
-                lines.extend(_format_task_with_subtasks(task, session))
+            for task in root_tasks:
+                lines.extend(_format_task_with_subtasks(task, tree))
         else:
             # Flat list of all tasks
             tasks = list_tasks_by_status(session, status_enum, project_id=project_id)

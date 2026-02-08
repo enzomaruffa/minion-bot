@@ -1,8 +1,8 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import ForeignKey, String, Text, create_engine
+from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -44,7 +44,7 @@ class Contact(Base):
     aliases: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)  # Comma-separated
     birthday: Mapped[Optional[datetime]] = mapped_column(nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
 
     tasks: Mapped[list["Task"]] = relationship(back_populates="contact")
 
@@ -56,7 +56,7 @@ class Project(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100), unique=True)
     emoji: Mapped[str] = mapped_column(String(10))
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
 
     tasks: Mapped[list["Task"]] = relationship(back_populates="project")
 
@@ -70,8 +70,8 @@ class UserProject(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     emoji: Mapped[str] = mapped_column(String(10), default="📁")
     tag_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id"), nullable=True)
-    archived: Mapped[bool] = mapped_column(default=False)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    archived: Mapped[bool] = mapped_column(default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
 
     tag: Mapped[Optional["Project"]] = relationship()
     tasks: Mapped[list["Task"]] = relationship(back_populates="user_project")
@@ -85,14 +85,14 @@ class Task(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[TaskStatus] = mapped_column(default=TaskStatus.TODO)
     priority: Mapped[TaskPriority] = mapped_column(default=TaskPriority.MEDIUM)
-    due_date: Mapped[Optional[datetime]] = mapped_column(nullable=True)
-    parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tasks.id"), nullable=True)
-    project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id"), nullable=True)
-    user_project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user_projects.id"), nullable=True)
-    contact_id: Mapped[Optional[int]] = mapped_column(ForeignKey("contacts.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    due_date: Mapped[Optional[datetime]] = mapped_column(nullable=True, index=True)
+    parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tasks.id"), nullable=True, index=True)
+    project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("projects.id"), nullable=True, index=True)
+    user_project_id: Mapped[Optional[int]] = mapped_column(ForeignKey("user_projects.id"), nullable=True, index=True)
+    contact_id: Mapped[Optional[int]] = mapped_column(ForeignKey("contacts.id"), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(
-        default=datetime.utcnow, onupdate=datetime.utcnow
+        default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
     )
 
     parent: Mapped[Optional["Task"]] = relationship(
@@ -114,7 +114,7 @@ class Attachment(Base):
     file_type: Mapped[str] = mapped_column(String(50))
     file_id: Mapped[str] = mapped_column(String(255))
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
 
     task: Mapped["Task"] = relationship(back_populates="attachments")
 
@@ -125,9 +125,9 @@ class Reminder(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     task_id: Mapped[Optional[int]] = mapped_column(ForeignKey("tasks.id"), nullable=True)
     message: Mapped[str] = mapped_column(Text)
-    remind_at: Mapped[datetime] = mapped_column()
-    delivered: Mapped[bool] = mapped_column(default=False)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    remind_at: Mapped[datetime] = mapped_column(index=True)
+    delivered: Mapped[bool] = mapped_column(default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
 
     task: Mapped[Optional["Task"]] = relationship(back_populates="reminders")
 
@@ -138,9 +138,9 @@ class CalendarEvent(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     google_event_id: Mapped[str] = mapped_column(String(255), unique=True)
     title: Mapped[str] = mapped_column(String(255))
-    start_time: Mapped[datetime] = mapped_column()
+    start_time: Mapped[datetime] = mapped_column(index=True)
     end_time: Mapped[datetime] = mapped_column()
-    synced_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    synced_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
 
 
 class Topic(Base):
@@ -149,7 +149,7 @@ class Topic(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100), unique=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
 
 
 class ShoppingList(Base):
@@ -157,7 +157,7 @@ class ShoppingList(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     list_type: Mapped[ShoppingListType] = mapped_column(unique=True)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
 
     items: Mapped[list["ShoppingItem"]] = relationship(back_populates="shopping_list")
 
@@ -166,16 +166,16 @@ class ShoppingItem(Base):
     __tablename__ = "shopping_items"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    list_id: Mapped[int] = mapped_column(ForeignKey("shopping_lists.id"))
+    list_id: Mapped[int] = mapped_column(ForeignKey("shopping_lists.id"), index=True)
     name: Mapped[str] = mapped_column(String(255))
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     recipient: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # Fallback if no contact
-    contact_id: Mapped[Optional[int]] = mapped_column(ForeignKey("contacts.id"), nullable=True)
+    contact_id: Mapped[Optional[int]] = mapped_column(ForeignKey("contacts.id"), nullable=True, index=True)
     priority: Mapped[ItemPriority] = mapped_column(default=ItemPriority.MEDIUM)
     checked: Mapped[bool] = mapped_column(default=False)
     quantity_target: Mapped[int] = mapped_column(default=1)
     quantity_purchased: Mapped[int] = mapped_column(default=0)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
 
     shopping_list: Mapped["ShoppingList"] = relationship(back_populates="items")
     contact: Mapped[Optional["Contact"]] = relationship()
@@ -199,12 +199,7 @@ class UserCalendarToken(Base):
     client_secret: Mapped[str] = mapped_column(String(255))
     scopes: Mapped[str] = mapped_column(Text)  # JSON list
     expiry: Mapped[Optional[datetime]] = mapped_column(nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(
-        default=datetime.utcnow, onupdate=datetime.utcnow
+        default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
     )
-
-
-def init_db(database_url: str) -> None:
-    engine = create_engine(database_url)
-    Base.metadata.create_all(engine)

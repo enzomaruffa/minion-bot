@@ -3,7 +3,7 @@ from typing import Optional
 
 from src.config import settings
 from src.db import session_scope
-from src.utils import parse_date
+from src.utils import parse_date, days_until_birthday, format_birthday_proximity
 from src.db.queries import (
     create_contact,
     delete_contact,
@@ -101,22 +101,12 @@ def upcoming_birthdays(days: int = 14) -> str:
 
         for contact in contacts:
             if contact.birthday:
+                d = days_until_birthday(contact.birthday, today)
                 bday = contact.birthday.date() if isinstance(contact.birthday, datetime) else contact.birthday
                 this_year_bday = bday.replace(year=today.year)
                 if this_year_bday < today:
                     this_year_bday = bday.replace(year=today.year + 1)
-                days_until = (this_year_bday - today).days
-
-                if days_until == 0:
-                    when = "TODAY!"
-                elif days_until == 1:
-                    when = "tomorrow"
-                elif days_until <= 7:
-                    when = f"in {days_until} days"
-                else:
-                    when = f"in {days_until} days"
-
-                lines.append(f"  #{contact.id} {contact.name} - {this_year_bday.strftime('%B %d')} ({when})")
+                lines.append(f"  #{contact.id} {contact.name} - {this_year_bday.strftime('%B %d')} ({format_birthday_proximity(d)})")
 
         return "\n".join(lines)
 

@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from google.auth.transport.requests import Request
@@ -68,7 +68,7 @@ def complete_auth(code: str) -> bool:
     """
     global _pending_flow
     
-    logger.info(f"Completing auth with code: {code[:20]}...")
+    logger.info("Completing auth with authorization code")
     
     if not _pending_flow:
         logger.error("No pending auth flow. Call get_auth_url first.")
@@ -123,7 +123,7 @@ def _is_token_expired(token) -> bool:
     """Check if a token is expired."""
     if not token.expiry:
         return False
-    return token.expiry < datetime.utcnow()
+    return token.expiry < datetime.now(timezone.utc)
 
 
 def get_credentials_for_user(telegram_user_id: int) -> Optional[Credentials]:
@@ -480,28 +480,6 @@ def delete_event(event_id: str, telegram_user_id: int | None = None) -> bool:
         return False
 
 
-def get_event(event_id: str, telegram_user_id: int | None = None) -> Optional[dict]:
-    """Get a single calendar event by ID.
-
-    Args:
-        event_id: Google event ID.
-        telegram_user_id: Optional user ID for per-user auth.
-
-    Returns:
-        Event dict if found, None otherwise.
-    """
-    service = _get_service_with_fallback(telegram_user_id)
-    if not service:
-        return None
-
-    try:
-        event = service.events().get(calendarId="primary", eventId=event_id).execute()
-        return event
-    except Exception as e:
-        logger.exception(f"Failed to get event: {e}")
-        return None
-
-
 def list_upcoming_events(
     days: int = 7, max_results: int = 20, telegram_user_id: int | None = None
 ) -> list[dict]:
@@ -519,7 +497,7 @@ def list_upcoming_events(
     if not service:
         return []
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     end = now + timedelta(days=days)
 
     try:

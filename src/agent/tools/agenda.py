@@ -3,11 +3,12 @@ from typing import Optional
 
 from src.config import settings
 from src.db import session_scope
-from src.db.models import TaskStatus
 from src.db.queries import (
+    count_backlog_tasks,
     list_calendar_events_range,
+    list_overdue_tasks,
     list_pending_reminders,
-    list_tasks_by_status,
+    list_tasks_due_on_date,
 )
 from src.utils import parse_date, format_date
 
@@ -34,27 +35,15 @@ def get_agenda(date: Optional[str] = None) -> str:
     day_end = day_start + timedelta(days=1)
 
     with session_scope() as session:
-        # Get tasks due today
-        all_tasks = list_tasks_by_status(session, None)
-        tasks_due = [
-            t for t in all_tasks
-            if t.due_date and day_start.replace(tzinfo=None) <= t.due_date < day_end.replace(tzinfo=None)
-            and t.status not in (TaskStatus.DONE, TaskStatus.CANCELLED)
-        ]
-
-        # Check for overdue tasks
+        # Targeted queries instead of loading all tasks
         now = datetime.now(settings.timezone).replace(tzinfo=None)
-        overdue_tasks = [
-            t for t in all_tasks
-            if t.due_date and t.due_date < day_start.replace(tzinfo=None)
-            and t.status not in (TaskStatus.DONE, TaskStatus.CANCELLED)
-        ]
-
-        # Get pending tasks (no due date but not done)
-        pending_tasks = [
-            t for t in all_tasks
-            if t.status == TaskStatus.TODO and not t.due_date
-        ]
+        tasks_due = list_tasks_due_on_date(
+            session,
+            day_start.replace(tzinfo=None),
+            day_end.replace(tzinfo=None),
+        )
+        overdue_tasks = list_overdue_tasks(session, day_start.replace(tzinfo=None))
+        backlog_count = count_backlog_tasks(session)
 
         # Get calendar events
         events = list_calendar_events_range(
@@ -112,8 +101,8 @@ def get_agenda(date: Optional[str] = None) -> str:
                 lines.append(f"  {time_str} #{rem.id} {rem.message}")
 
         # Pending tasks (backlog)
-        if pending_tasks:
+        if backlog_count > 0:
             lines.append("")
-            lines.append(f"{len(pending_tasks)} tasks in backlog")
+            lines.append(f"{backlog_count} tasks in backlog")
 
         return "\n".join(lines)

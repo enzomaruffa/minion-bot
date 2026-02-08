@@ -47,16 +47,6 @@ def _infer_list_type(item: str, recipient: Optional[str] = None) -> ShoppingList
     return ShoppingListType.GROCERIES
 
 
-def _get_list_emoji(list_type: ShoppingListType) -> str:
-    """Get the emoji for a list type."""
-    emojis = {
-        ShoppingListType.GIFTS: "gift",
-        ShoppingListType.GROCERIES: "cart",
-        ShoppingListType.WISHLIST: "star",
-    }
-    return emojis.get(list_type, "list")
-
-
 def _parse_quantity(item: str) -> tuple[str, int]:
     """Parse quantity from item name (e.g., '12 eggs' -> ('eggs', 12))."""
     # Match patterns like "12 eggs", "6 bananas", "1 item"

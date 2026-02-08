@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Sequence
 
 from sqlalchemy import select
@@ -18,7 +18,6 @@ from .models import (
     Task,
     TaskPriority,
     TaskStatus,
-    Topic,
     UserCalendarToken,
     UserProject,
 )
@@ -70,7 +69,7 @@ def seed_default_projects(session: Session) -> None:
         existing = session.scalars(select(Project).where(Project.name == name)).first()
         if not existing:
             session.add(Project(name=name, emoji=emoji))
-    session.commit()
+    session.flush()
 
 
 def get_project_by_name(session: Session, name: str) -> Optional[Project]:
@@ -89,7 +88,7 @@ def create_project(session: Session, name: str, emoji: str) -> Project:
     """Create a new project."""
     project = Project(name=name, emoji=emoji)
     session.add(project)
-    session.commit()
+    session.flush()
     session.refresh(project)
     return project
 
@@ -110,7 +109,7 @@ def create_user_project(
         tag_id=tag_id,
     )
     session.add(project)
-    session.commit()
+    session.flush()
     session.refresh(project)
     return project
 
@@ -209,7 +208,7 @@ def update_user_project(
     if archived is not None:
         project.archived = archived
 
-    session.commit()
+    session.flush()
     session.refresh(project)
     return project
 
@@ -220,7 +219,7 @@ def delete_user_project(session: Session, project_id: int) -> bool:
     if not project:
         return False
     project.archived = True
-    session.commit()
+    session.flush()
     return True
 
 
@@ -247,14 +246,18 @@ def bulk_update_tasks_project(
     Returns:
         List of task IDs that were successfully updated.
     """
-    updated_ids = []
-    for task_id in task_ids:
-        task = session.get(Task, task_id)
-        if task:
-            task.user_project_id = user_project_id
-            updated_ids.append(task_id)
-    session.commit()
-    return updated_ids
+    from sqlalchemy import update
+
+    if not task_ids:
+        return []
+    stmt = (
+        update(Task)
+        .where(Task.id.in_(task_ids))
+        .values(user_project_id=user_project_id)
+    )
+    session.execute(stmt)
+    session.flush()
+    return task_ids
 
 
 def move_all_tasks_between_projects(
@@ -278,7 +281,7 @@ def move_all_tasks_between_projects(
         .values(user_project_id=to_project_id)
     )
     result = session.execute(stmt)
-    session.commit()
+    session.flush()
     return result.rowcount
 
 
@@ -305,7 +308,7 @@ def create_task(
         contact_id=contact_id,
     )
     session.add(task)
-    session.commit()
+    session.flush()
     session.refresh(task)
     return task
 
@@ -363,7 +366,7 @@ def update_task(
     if clear_contact:
         task.contact_id = None
 
-    session.commit()
+    session.flush()
     session.refresh(task)
     return task
 
@@ -373,7 +376,7 @@ def delete_task(session: Session, task_id: int) -> bool:
     if not task:
         return False
     session.delete(task)
-    session.commit()
+    session.flush()
     return True
 
 
@@ -432,6 +435,33 @@ def count_tasks_by_due_date(session: Session, date: datetime) -> int:
     return session.scalar(stmt) or 0
 
 
+def list_tasks_due_on_date(
+    session: Session, day_start: datetime, day_end: datetime
+) -> Sequence[Task]:
+    """Get active tasks due on a specific date range."""
+    stmt = (
+        _task_query()
+        .where(Task.due_date >= day_start)
+        .where(Task.due_date < day_end)
+        .where(Task.status.in_([TaskStatus.TODO, TaskStatus.IN_PROGRESS]))
+        .order_by(Task.due_date)
+    )
+    return session.scalars(stmt).all()
+
+
+def count_backlog_tasks(session: Session) -> int:
+    """Count tasks with no due date and status=todo."""
+    from sqlalchemy import func
+
+    stmt = (
+        select(func.count())
+        .select_from(Task)
+        .where(Task.status == TaskStatus.TODO)
+        .where(Task.due_date.is_(None))
+    )
+    return session.scalar(stmt) or 0
+
+
 def get_subtasks(session: Session, task_id: int) -> Sequence[Task]:
     """Get all subtasks of a given task."""
     stmt = (
@@ -469,7 +499,7 @@ def create_reminder(
 ) -> Reminder:
     reminder = Reminder(message=message, remind_at=remind_at, task_id=task_id)
     session.add(reminder)
-    session.commit()
+    session.flush()
     session.refresh(reminder)
     return reminder
 
@@ -494,7 +524,7 @@ def mark_reminder_delivered(session: Session, reminder_id: int) -> bool:
     if not reminder:
         return False
     reminder.delivered = True
-    session.commit()
+    session.flush()
     return True
 
 
@@ -503,7 +533,7 @@ def delete_reminder(session: Session, reminder_id: int) -> bool:
     if not reminder:
         return False
     session.delete(reminder)
-    session.commit()
+    session.flush()
     return True
 
 
@@ -522,7 +552,7 @@ def sync_calendar_event(
         event.title = title
         event.start_time = start_time
         event.end_time = end_time
-        event.synced_at = datetime.utcnow()
+        event.synced_at = datetime.now(timezone.utc)
     else:
         event = CalendarEvent(
             google_event_id=google_event_id,
@@ -532,7 +562,7 @@ def sync_calendar_event(
         )
         session.add(event)
 
-    session.commit()
+    session.flush()
     session.refresh(event)
     return event
 
@@ -571,39 +601,13 @@ def create_attachment(
         description=description,
     )
     session.add(attachment)
-    session.commit()
+    session.flush()
     session.refresh(attachment)
     return attachment
 
 
 def list_attachments_by_task(session: Session, task_id: int) -> Sequence[Attachment]:
     stmt = select(Attachment).where(Attachment.task_id == task_id)
-    return session.scalars(stmt).all()
-
-
-# Topic
-def create_topic(
-    session: Session, name: str, description: Optional[str] = None
-) -> Topic:
-    topic = Topic(name=name, description=description)
-    session.add(topic)
-    session.commit()
-    session.refresh(topic)
-    return topic
-
-
-def get_or_create_topic(
-    session: Session, name: str, description: Optional[str] = None
-) -> Topic:
-    stmt = select(Topic).where(Topic.name == name)
-    topic = session.scalars(stmt).first()
-    if topic:
-        return topic
-    return create_topic(session, name, description)
-
-
-def list_topics(session: Session) -> Sequence[Topic]:
-    stmt = select(Topic).order_by(Topic.name)
     return session.scalars(stmt).all()
 
 
@@ -616,7 +620,7 @@ def seed_default_shopping_lists(session: Session) -> None:
         ).first()
         if not existing:
             session.add(ShoppingList(list_type=list_type))
-    session.commit()
+    session.flush()
 
 
 def get_shopping_list_by_type(
@@ -656,7 +660,7 @@ def create_shopping_item(
         quantity_purchased=0,
     )
     session.add(item)
-    session.commit()
+    session.flush()
     session.refresh(item)
     return item
 
@@ -691,7 +695,7 @@ def check_shopping_item(session: Session, item_id: int, checked: bool = True) ->
     if not item:
         return False
     item.checked = checked
-    session.commit()
+    session.flush()
     return True
 
 
@@ -716,7 +720,7 @@ def purchase_shopping_item(
     if item.quantity_purchased >= item.quantity_target:
         item.checked = True
     
-    session.commit()
+    session.flush()
     return (True, item.quantity_purchased, item.quantity_target)
 
 
@@ -726,7 +730,7 @@ def delete_shopping_item(session: Session, item_id: int) -> bool:
     if not item:
         return False
     session.delete(item)
-    session.commit()
+    session.flush()
     return True
 
 
@@ -734,14 +738,18 @@ def clear_checked_items(
     session: Session, list_type: Optional[ShoppingListType] = None
 ) -> int:
     """Clear all checked items, optionally from a specific list. Returns count."""
-    items = list_shopping_items(session, list_type, include_checked=True)
-    count = 0
-    for item in items:
-        if item.checked:
-            session.delete(item)
-            count += 1
-    session.commit()
-    return count
+    from sqlalchemy import delete
+
+    stmt = delete(ShoppingItem).where(ShoppingItem.checked == True)
+    if list_type:
+        shopping_list = get_shopping_list_by_type(session, list_type)
+        if shopping_list:
+            stmt = stmt.where(ShoppingItem.list_id == shopping_list.id)
+        else:
+            return 0
+    result = session.execute(stmt)
+    session.flush()
+    return result.rowcount
 
 
 # Contact CRUD
@@ -755,7 +763,7 @@ def create_contact(
     """Create a new contact."""
     contact = Contact(name=name, aliases=aliases, birthday=birthday, notes=notes)
     session.add(contact)
-    session.commit()
+    session.flush()
     session.refresh(contact)
     return contact
 
@@ -826,7 +834,7 @@ def update_contact(
     if clear_aliases:
         contact.aliases = None
 
-    session.commit()
+    session.flush()
     session.refresh(contact)
     return contact
 
@@ -837,31 +845,25 @@ def delete_contact(session: Session, contact_id: int) -> bool:
     if not contact:
         return False
     session.delete(contact)
-    session.commit()
+    session.flush()
     return True
 
 
 def list_upcoming_birthdays(session: Session, within_days: int = 14) -> Sequence[Contact]:
     """List contacts with birthdays within the next N days."""
     from src.config import settings
+    from src.utils import days_until_birthday
 
-    contacts = list_contacts(session)
+    # Only load contacts that have a birthday set
+    stmt = select(Contact).where(Contact.birthday.isnot(None)).order_by(Contact.name)
+    contacts = session.scalars(stmt).all()
     today = datetime.now(settings.timezone).date()
     upcoming = []
 
     for contact in contacts:
-        if contact.birthday:
-            # Get this year's birthday
-            bday = contact.birthday.date() if isinstance(contact.birthday, datetime) else contact.birthday
-            this_year_bday = bday.replace(year=today.year)
-
-            # If birthday already passed this year, check next year
-            if this_year_bday < today:
-                this_year_bday = bday.replace(year=today.year + 1)
-
-            days_until = (this_year_bday - today).days
-            if 0 <= days_until <= within_days:
-                upcoming.append((contact, days_until))
+        d = days_until_birthday(contact.birthday, today)
+        if 0 <= d <= within_days:
+            upcoming.append((contact, d))
 
     # Sort by days until birthday
     upcoming.sort(key=lambda x: x[1])
@@ -947,7 +949,7 @@ def save_user_calendar_token(
         existing.client_secret = client_secret
         existing.scopes = json.dumps(scopes)
         existing.expiry = expiry
-        session.commit()
+        session.flush()
         session.refresh(existing)
         return existing
 
@@ -962,7 +964,7 @@ def save_user_calendar_token(
         expiry=expiry,
     )
     session.add(token)
-    session.commit()
+    session.flush()
     session.refresh(token)
     return token
 
@@ -973,7 +975,7 @@ def delete_user_calendar_token(session: Session, telegram_user_id: int) -> bool:
     if not token:
         return False
     session.delete(token)
-    session.commit()
+    session.flush()
     return True
 
 
@@ -990,5 +992,5 @@ def update_user_calendar_token_credentials(
     token.access_token = access_token
     if expiry:
         token.expiry = expiry
-    session.commit()
+    session.flush()
     return True

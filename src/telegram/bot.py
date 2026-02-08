@@ -18,8 +18,6 @@ from src.telegram.commands import (
     calendar_command,
     help_command,
     auth_command,
-    handle_auth_code,
-    is_awaiting_auth_code,
     contacts_command,
     birthdays_command,
     groceries_command,
@@ -30,6 +28,8 @@ from src.telegram.commands import (
     reminders_command,
     get_last_command_context,
     clear_command_context,
+    is_authorized,
+    require_auth,
 )
 
 from src.config import settings
@@ -52,29 +52,14 @@ async def safe_reply(message, text: str) -> None:
             raise
 
 
-def is_authorized(user_id: int) -> bool:
-    """Check if the user is authorized to use the bot."""
-    return user_id == settings.telegram_user_id
-
-
+@require_auth
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle incoming text messages."""
     if not update.message or not update.message.text:
         return
 
-    user_id = update.effective_user.id if update.effective_user else None
-    if not user_id or not is_authorized(user_id):
-        await update.message.reply_text("Sorry, you're not authorized to use this bot.")
-        return
-
     user_message = update.message.text
     logger.info(f"Received message: {user_message[:50]}...")
-
-    # Check if we're waiting for an auth code
-    if is_awaiting_auth_code():
-        response = await handle_auth_code(user_message)
-        await update.message.reply_text(response)
-        return
 
     # Inject last command context if recent
     cmd_context = get_last_command_context()
@@ -92,14 +77,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
 
 
+@require_auth
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle incoming voice messages."""
     if not update.message or not update.message.voice:
-        return
-
-    user_id = update.effective_user.id if update.effective_user else None
-    if not user_id or not is_authorized(user_id):
-        await update.message.reply_text("Sorry, you're not authorized to use this bot.")
         return
 
     logger.info("Received voice message, transcribing...")
@@ -131,14 +112,10 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
 
 
+@require_auth
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle incoming photo messages."""
     if not update.message or not update.message.photo:
-        return
-
-    user_id = update.effective_user.id if update.effective_user else None
-    if not user_id or not is_authorized(user_id):
-        await update.message.reply_text("Sorry, you're not authorized to use this bot.")
         return
 
     logger.info("Received photo, analyzing...")
@@ -254,7 +231,8 @@ async def send_message(text: str) -> None:
             raise
 
 
-# Error notification rate limiting
+# Error notification rate limiting (bounded to prevent memory leak)
+_MAX_ERROR_ENTRIES = 100
 _last_error_notification: dict[str, datetime] = {}
 _ERROR_RATE_LIMIT_SECONDS = 60
 
@@ -268,6 +246,8 @@ async def notify_error(tool_name: str, error: Exception, error_id: str | None = 
     
     # Rate limit by tool name
     now = datetime.now()
+    if len(_last_error_notification) > _MAX_ERROR_ENTRIES:
+        _last_error_notification.clear()
     if tool_name in _last_error_notification:
         elapsed = (now - _last_error_notification[tool_name]).total_seconds()
         if elapsed < _ERROR_RATE_LIMIT_SECONDS:

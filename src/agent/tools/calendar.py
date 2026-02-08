@@ -1,17 +1,16 @@
 from datetime import datetime, timedelta
-from typing import Optional
 
+from src.config import settings
 from src.integrations.calendar import (
-    test_connection,
     create_event,
-    update_event,
     delete_event,
-    list_upcoming_events,
     is_calendar_connected,
     is_calendar_connected_for_user,
+    list_upcoming_events,
+    test_connection,
+    update_event,
 )
 from src.utils import parse_date
-from src.config import settings
 
 
 def _get_user_id() -> int:
@@ -46,10 +45,10 @@ def test_calendar() -> str:
 def create_calendar_event(
     title: str,
     start: str,
-    end: Optional[str] = None,
-    duration_minutes: Optional[int] = 60,
-    description: Optional[str] = None,
-    location: Optional[str] = None,
+    end: str | None = None,
+    duration_minutes: int | None = 60,
+    description: str | None = None,
+    location: str | None = None,
 ) -> str:
     """Create a new calendar event.
 
@@ -86,7 +85,7 @@ def create_calendar_event(
         location=location,
         telegram_user_id=_get_user_id(),
     )
-    
+
     if result:
         return (
             f"✓ <b>Event created</b>\n"
@@ -100,11 +99,11 @@ def create_calendar_event(
 
 def update_calendar_event(
     event_id: str,
-    title: Optional[str] = None,
-    start: Optional[str] = None,
-    end: Optional[str] = None,
-    description: Optional[str] = None,
-    location: Optional[str] = None,
+    title: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
+    description: str | None = None,
+    location: str | None = None,
 ) -> str:
     """Update an existing calendar event.
 
@@ -134,7 +133,7 @@ def update_calendar_event(
         location=location,
         telegram_user_id=_get_user_id(),
     )
-    
+
     if result:
         return f"✓ Event updated: {result['id']}"
     else:
@@ -172,7 +171,7 @@ def list_calendar_events(days: int = 7) -> str:
         return "Calendar not connected. Use /auth to connect Google Calendar."
 
     events = list_upcoming_events(days=days, telegram_user_id=_get_user_id())
-    
+
     if not events:
         return f"<i>No events in the next {days} days</i>"
 

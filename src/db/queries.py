@@ -1,5 +1,5 @@
-from datetime import datetime, timedelta, timezone
-from typing import Optional, Sequence
+from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -22,31 +22,25 @@ from .models import (
     UserProject,
 )
 
-
 # ============================================================================
 # Base Query Helpers (DRY)
 # ============================================================================
 
+
 def _task_query() -> Select[tuple[Task]]:
     """Base query for Task with common eager loads."""
-    return (
-        select(Task)
-        .options(
-            selectinload(Task.project),
-            selectinload(Task.user_project),
-            selectinload(Task.contact),
-        )
+    return select(Task).options(
+        selectinload(Task.project),
+        selectinload(Task.user_project),
+        selectinload(Task.contact),
     )
 
 
 def _shopping_item_query() -> Select[tuple[ShoppingItem]]:
     """Base query for ShoppingItem with common eager loads."""
-    return (
-        select(ShoppingItem)
-        .options(
-            selectinload(ShoppingItem.shopping_list),
-            selectinload(ShoppingItem.contact),
-        )
+    return select(ShoppingItem).options(
+        selectinload(ShoppingItem.shopping_list),
+        selectinload(ShoppingItem.contact),
     )
 
 
@@ -72,7 +66,7 @@ def seed_default_projects(session: Session) -> None:
     session.flush()
 
 
-def get_project_by_name(session: Session, name: str) -> Optional[Project]:
+def get_project_by_name(session: Session, name: str) -> Project | None:
     """Get a project by name (case-insensitive)."""
     stmt = select(Project).where(Project.name.ilike(name))
     return session.scalars(stmt).first()
@@ -97,9 +91,9 @@ def create_project(session: Session, name: str, emoji: str) -> Project:
 def create_user_project(
     session: Session,
     name: str,
-    description: Optional[str] = None,
+    description: str | None = None,
     emoji: str = "📁",
-    tag_id: Optional[int] = None,
+    tag_id: int | None = None,
 ) -> UserProject:
     """Create a new user project."""
     project = UserProject(
@@ -114,12 +108,12 @@ def create_user_project(
     return project
 
 
-def get_user_project(session: Session, project_id: int) -> Optional[UserProject]:
+def get_user_project(session: Session, project_id: int) -> UserProject | None:
     """Get a user project by ID."""
     return session.get(UserProject, project_id)
 
 
-def get_user_project_by_name(session: Session, name: str) -> Optional[UserProject]:
+def get_user_project_by_name(session: Session, name: str) -> UserProject | None:
     """Get a user project by name (case-insensitive)."""
     stmt = select(UserProject).where(UserProject.name.ilike(name)).where(UserProject.archived == False)
     return session.scalars(stmt).first()
@@ -140,7 +134,7 @@ def list_user_projects(
         has_done: Filter to projects with completed tasks.
         is_empty: Filter to projects with no tasks.
     """
-    from sqlalchemy import exists, and_
+    from sqlalchemy import and_, exists
 
     stmt = select(UserProject).order_by(UserProject.name)
     if not include_archived:
@@ -149,10 +143,7 @@ def list_user_projects(
     # Filter by pending tasks
     if has_todo is not None:
         pending_exists = exists().where(
-            and_(
-                Task.user_project_id == UserProject.id,
-                Task.status.in_([TaskStatus.TODO, TaskStatus.IN_PROGRESS])
-            )
+            and_(Task.user_project_id == UserProject.id, Task.status.in_([TaskStatus.TODO, TaskStatus.IN_PROGRESS]))
         )
         if has_todo:
             stmt = stmt.where(pending_exists)
@@ -161,12 +152,7 @@ def list_user_projects(
 
     # Filter by completed tasks
     if has_done is not None:
-        done_exists = exists().where(
-            and_(
-                Task.user_project_id == UserProject.id,
-                Task.status == TaskStatus.DONE
-            )
-        )
+        done_exists = exists().where(and_(Task.user_project_id == UserProject.id, Task.status == TaskStatus.DONE))
         if has_done:
             stmt = stmt.where(done_exists)
         else:
@@ -186,12 +172,12 @@ def list_user_projects(
 def update_user_project(
     session: Session,
     project_id: int,
-    name: Optional[str] = None,
-    description: Optional[str] = None,
-    emoji: Optional[str] = None,
-    tag_id: Optional[int] = None,
-    archived: Optional[bool] = None,
-) -> Optional[UserProject]:
+    name: str | None = None,
+    description: str | None = None,
+    emoji: str | None = None,
+    tag_id: int | None = None,
+    archived: bool | None = None,
+) -> UserProject | None:
     """Update a user project."""
     project = session.get(UserProject, project_id)
     if not project:
@@ -225,17 +211,11 @@ def delete_user_project(session: Session, project_id: int) -> bool:
 
 def get_tasks_by_user_project(session: Session, project_id: int) -> Sequence[Task]:
     """Get all tasks in a user project."""
-    stmt = (
-        _task_query()
-        .where(Task.user_project_id == project_id)
-        .order_by(Task.created_at.desc())
-    )
+    stmt = _task_query().where(Task.user_project_id == project_id).order_by(Task.created_at.desc())
     return session.scalars(stmt).all()
 
 
-def bulk_update_tasks_project(
-    session: Session, task_ids: list[int], user_project_id: int | None
-) -> list[int]:
+def bulk_update_tasks_project(session: Session, task_ids: list[int], user_project_id: int | None) -> list[int]:
     """Bulk update user_project_id for multiple tasks.
 
     Args:
@@ -250,19 +230,13 @@ def bulk_update_tasks_project(
 
     if not task_ids:
         return []
-    stmt = (
-        update(Task)
-        .where(Task.id.in_(task_ids))
-        .values(user_project_id=user_project_id)
-    )
+    stmt = update(Task).where(Task.id.in_(task_ids)).values(user_project_id=user_project_id)
     session.execute(stmt)
     session.flush()
     return task_ids
 
 
-def move_all_tasks_between_projects(
-    session: Session, from_project_id: int, to_project_id: int
-) -> int:
+def move_all_tasks_between_projects(session: Session, from_project_id: int, to_project_id: int) -> int:
     """Move all tasks from one project to another.
 
     Args:
@@ -275,11 +249,7 @@ def move_all_tasks_between_projects(
     """
     from sqlalchemy import update
 
-    stmt = (
-        update(Task)
-        .where(Task.user_project_id == from_project_id)
-        .values(user_project_id=to_project_id)
-    )
+    stmt = update(Task).where(Task.user_project_id == from_project_id).values(user_project_id=to_project_id)
     result = session.execute(stmt)
     session.flush()
     return result.rowcount
@@ -289,13 +259,13 @@ def move_all_tasks_between_projects(
 def create_task(
     session: Session,
     title: str,
-    description: Optional[str] = None,
+    description: str | None = None,
     priority: TaskPriority = TaskPriority.MEDIUM,
-    due_date: Optional[datetime] = None,
-    parent_id: Optional[int] = None,
-    project_id: Optional[int] = None,
-    user_project_id: Optional[int] = None,
-    contact_id: Optional[int] = None,
+    due_date: datetime | None = None,
+    parent_id: int | None = None,
+    project_id: int | None = None,
+    user_project_id: int | None = None,
+    contact_id: int | None = None,
 ) -> Task:
     task = Task(
         title=title,
@@ -313,7 +283,7 @@ def create_task(
     return task
 
 
-def get_task(session: Session, task_id: int) -> Optional[Task]:
+def get_task(session: Session, task_id: int) -> Task | None:
     stmt = _task_query().where(Task.id == task_id)
     return session.scalars(stmt).first()
 
@@ -321,20 +291,20 @@ def get_task(session: Session, task_id: int) -> Optional[Task]:
 def update_task(
     session: Session,
     task_id: int,
-    title: Optional[str] = None,
-    description: Optional[str] = None,
-    status: Optional[TaskStatus] = None,
-    priority: Optional[TaskPriority] = None,
-    due_date: Optional[datetime] = None,
-    parent_id: Optional[int] = None,
-    project_id: Optional[int] = None,
-    user_project_id: Optional[int] = None,
-    contact_id: Optional[int] = None,
+    title: str | None = None,
+    description: str | None = None,
+    status: TaskStatus | None = None,
+    priority: TaskPriority | None = None,
+    due_date: datetime | None = None,
+    parent_id: int | None = None,
+    project_id: int | None = None,
+    user_project_id: int | None = None,
+    contact_id: int | None = None,
     clear_parent: bool = False,
     clear_project: bool = False,
     clear_user_project: bool = False,
     clear_contact: bool = False,
-) -> Optional[Task]:
+) -> Task | None:
     task = session.get(Task, task_id)
     if not task:
         return None
@@ -382,9 +352,9 @@ def delete_task(session: Session, task_id: int) -> bool:
 
 def list_tasks_by_status(
     session: Session,
-    status: Optional[TaskStatus] = None,
+    status: TaskStatus | None = None,
     root_only: bool = False,
-    project_id: Optional[int] = None,
+    project_id: int | None = None,
 ) -> Sequence[Task]:
     stmt = _task_query().order_by(Task.created_at.desc())
     if status:
@@ -423,6 +393,7 @@ def list_tasks_due_soon(session: Session, now: datetime, within_hours: int = 24)
 def count_tasks_by_due_date(session: Session, date: datetime) -> int:
     """Count tasks due on a specific date."""
     from sqlalchemy import func
+
     start = date.replace(hour=0, minute=0, second=0, microsecond=0)
     end = date.replace(hour=23, minute=59, second=59, microsecond=999999)
     stmt = (
@@ -435,9 +406,7 @@ def count_tasks_by_due_date(session: Session, date: datetime) -> int:
     return session.scalar(stmt) or 0
 
 
-def list_tasks_due_on_date(
-    session: Session, day_start: datetime, day_end: datetime
-) -> Sequence[Task]:
+def list_tasks_due_on_date(session: Session, day_start: datetime, day_end: datetime) -> Sequence[Task]:
     """Get active tasks due on a specific date range."""
     stmt = (
         _task_query()
@@ -453,26 +422,17 @@ def count_backlog_tasks(session: Session) -> int:
     """Count tasks with no due date and status=todo."""
     from sqlalchemy import func
 
-    stmt = (
-        select(func.count())
-        .select_from(Task)
-        .where(Task.status == TaskStatus.TODO)
-        .where(Task.due_date.is_(None))
-    )
+    stmt = select(func.count()).select_from(Task).where(Task.status == TaskStatus.TODO).where(Task.due_date.is_(None))
     return session.scalar(stmt) or 0
 
 
 def get_subtasks(session: Session, task_id: int) -> Sequence[Task]:
     """Get all subtasks of a given task."""
-    stmt = (
-        _task_query()
-        .where(Task.parent_id == task_id)
-        .order_by(Task.created_at)
-    )
+    stmt = _task_query().where(Task.parent_id == task_id).order_by(Task.created_at)
     return session.scalars(stmt).all()
 
 
-def get_task_with_subtasks(session: Session, task_id: int) -> Optional[Task]:
+def get_task_with_subtasks(session: Session, task_id: int) -> Task | None:
     """Get a task with its subtasks eagerly loaded."""
     task = session.get(Task, task_id)
     if task:
@@ -495,7 +455,7 @@ def create_reminder(
     session: Session,
     message: str,
     remind_at: datetime,
-    task_id: Optional[int] = None,
+    task_id: int | None = None,
 ) -> Reminder:
     reminder = Reminder(message=message, remind_at=remind_at, task_id=task_id)
     session.add(reminder)
@@ -504,7 +464,7 @@ def create_reminder(
     return reminder
 
 
-def list_pending_reminders(session: Session, before: Optional[datetime] = None) -> Sequence[Reminder]:
+def list_pending_reminders(session: Session, before: datetime | None = None) -> Sequence[Reminder]:
     stmt = select(Reminder).where(Reminder.delivered == False).order_by(Reminder.remind_at)
     if before:
         stmt = stmt.where(Reminder.remind_at <= before)
@@ -552,7 +512,7 @@ def sync_calendar_event(
         event.title = title
         event.start_time = start_time
         event.end_time = end_time
-        event.synced_at = datetime.now(timezone.utc)
+        event.synced_at = datetime.now(UTC)
     else:
         event = CalendarEvent(
             google_event_id=google_event_id,
@@ -567,9 +527,7 @@ def sync_calendar_event(
     return event
 
 
-def list_calendar_events_range(
-    session: Session, start: datetime, end: datetime
-) -> Sequence[CalendarEvent]:
+def list_calendar_events_range(session: Session, start: datetime, end: datetime) -> Sequence[CalendarEvent]:
     stmt = (
         select(CalendarEvent)
         .where(CalendarEvent.start_time >= start)
@@ -579,9 +537,7 @@ def list_calendar_events_range(
     return session.scalars(stmt).all()
 
 
-def get_calendar_event_by_google_id(
-    session: Session, google_event_id: str
-) -> Optional[CalendarEvent]:
+def get_calendar_event_by_google_id(session: Session, google_event_id: str) -> CalendarEvent | None:
     stmt = select(CalendarEvent).where(CalendarEvent.google_event_id == google_event_id)
     return session.scalars(stmt).first()
 
@@ -592,7 +548,7 @@ def create_attachment(
     task_id: int,
     file_type: str,
     file_id: str,
-    description: Optional[str] = None,
+    description: str | None = None,
 ) -> Attachment:
     attachment = Attachment(
         task_id=task_id,
@@ -615,17 +571,13 @@ def list_attachments_by_task(session: Session, task_id: int) -> Sequence[Attachm
 def seed_default_shopping_lists(session: Session) -> None:
     """Seed default shopping lists if they don't exist."""
     for list_type in ShoppingListType:
-        existing = session.scalars(
-            select(ShoppingList).where(ShoppingList.list_type == list_type)
-        ).first()
+        existing = session.scalars(select(ShoppingList).where(ShoppingList.list_type == list_type)).first()
         if not existing:
             session.add(ShoppingList(list_type=list_type))
     session.flush()
 
 
-def get_shopping_list_by_type(
-    session: Session, list_type: ShoppingListType
-) -> Optional[ShoppingList]:
+def get_shopping_list_by_type(session: Session, list_type: ShoppingListType) -> ShoppingList | None:
     """Get a shopping list by type."""
     stmt = select(ShoppingList).where(ShoppingList.list_type == list_type)
     return session.scalars(stmt).first()
@@ -635,9 +587,9 @@ def create_shopping_item(
     session: Session,
     list_type: ShoppingListType,
     name: str,
-    notes: Optional[str] = None,
-    recipient: Optional[str] = None,
-    contact_id: Optional[int] = None,
+    notes: str | None = None,
+    recipient: str | None = None,
+    contact_id: int | None = None,
     priority: ItemPriority = ItemPriority.MEDIUM,
     quantity_target: int = 1,
 ) -> ShoppingItem:
@@ -665,7 +617,7 @@ def create_shopping_item(
     return item
 
 
-def get_shopping_item(session: Session, item_id: int) -> Optional[ShoppingItem]:
+def get_shopping_item(session: Session, item_id: int) -> ShoppingItem | None:
     """Get a shopping item by ID."""
     stmt = _shopping_item_query().where(ShoppingItem.id == item_id)
     return session.scalars(stmt).first()
@@ -673,7 +625,7 @@ def get_shopping_item(session: Session, item_id: int) -> Optional[ShoppingItem]:
 
 def list_shopping_items(
     session: Session,
-    list_type: Optional[ShoppingListType] = None,
+    list_type: ShoppingListType | None = None,
     include_checked: bool = True,
 ) -> Sequence[ShoppingItem]:
     """List shopping items, optionally filtered by list type."""
@@ -699,27 +651,22 @@ def check_shopping_item(session: Session, item_id: int, checked: bool = True) ->
     return True
 
 
-def purchase_shopping_item(
-    session: Session, item_id: int, quantity: int = 1
-) -> tuple[bool, int, int]:
+def purchase_shopping_item(session: Session, item_id: int, quantity: int = 1) -> tuple[bool, int, int]:
     """Add to quantity purchased for a shopping item.
-    
+
     Returns (success, new_purchased, target) tuple.
     Auto-checks item if purchased >= target.
     """
     item = session.get(ShoppingItem, item_id)
     if not item:
         return (False, 0, 0)
-    
-    item.quantity_purchased = min(
-        item.quantity_purchased + quantity,
-        item.quantity_target
-    )
-    
+
+    item.quantity_purchased = min(item.quantity_purchased + quantity, item.quantity_target)
+
     # Auto-check if fully purchased
     if item.quantity_purchased >= item.quantity_target:
         item.checked = True
-    
+
     session.flush()
     return (True, item.quantity_purchased, item.quantity_target)
 
@@ -734,9 +681,7 @@ def delete_shopping_item(session: Session, item_id: int) -> bool:
     return True
 
 
-def clear_checked_items(
-    session: Session, list_type: Optional[ShoppingListType] = None
-) -> int:
+def clear_checked_items(session: Session, list_type: ShoppingListType | None = None) -> int:
     """Clear all checked items, optionally from a specific list. Returns count."""
     from sqlalchemy import delete
 
@@ -756,9 +701,9 @@ def clear_checked_items(
 def create_contact(
     session: Session,
     name: str,
-    aliases: Optional[str] = None,
-    birthday: Optional[datetime] = None,
-    notes: Optional[str] = None,
+    aliases: str | None = None,
+    birthday: datetime | None = None,
+    notes: str | None = None,
 ) -> Contact:
     """Create a new contact."""
     contact = Contact(name=name, aliases=aliases, birthday=birthday, notes=notes)
@@ -768,17 +713,17 @@ def create_contact(
     return contact
 
 
-def get_contact(session: Session, contact_id: int) -> Optional[Contact]:
+def get_contact(session: Session, contact_id: int) -> Contact | None:
     """Get a contact by ID."""
     return session.get(Contact, contact_id)
 
 
-def get_contact_by_name(session: Session, name: str) -> Optional[Contact]:
+def get_contact_by_name(session: Session, name: str) -> Contact | None:
     """Get a contact by name or alias (case-insensitive).
 
     Uses SQL LIKE for efficient alias searching instead of loading all contacts.
     """
-    from sqlalchemy import or_, func
+    from sqlalchemy import func, or_
 
     # Try exact name match first
     stmt = select(Contact).where(Contact.name.ilike(name))
@@ -809,13 +754,13 @@ def list_contacts(session: Session) -> Sequence[Contact]:
 def update_contact(
     session: Session,
     contact_id: int,
-    name: Optional[str] = None,
-    aliases: Optional[str] = None,
-    birthday: Optional[datetime] = None,
-    notes: Optional[str] = None,
+    name: str | None = None,
+    aliases: str | None = None,
+    birthday: datetime | None = None,
+    notes: str | None = None,
     clear_birthday: bool = False,
     clear_aliases: bool = False,
-) -> Optional[Contact]:
+) -> Contact | None:
     """Update a contact."""
     contact = session.get(Contact, contact_id)
     if not contact:
@@ -872,11 +817,7 @@ def list_upcoming_birthdays(session: Session, within_days: int = 14) -> Sequence
 
 def get_tasks_by_contact(session: Session, contact_id: int) -> Sequence[Task]:
     """Get all tasks linked to a contact."""
-    stmt = (
-        _task_query()
-        .where(Task.contact_id == contact_id)
-        .order_by(Task.created_at.desc())
-    )
+    stmt = _task_query().where(Task.contact_id == contact_id).order_by(Task.created_at.desc())
     return session.scalars(stmt).all()
 
 
@@ -896,9 +837,7 @@ def get_task_counts_by_contacts(session: Session, contact_ids: list[int]) -> dic
     from sqlalchemy import func
 
     stmt = (
-        select(Task.contact_id, func.count(Task.id))
-        .where(Task.contact_id.in_(contact_ids))
-        .group_by(Task.contact_id)
+        select(Task.contact_id, func.count(Task.id)).where(Task.contact_id.in_(contact_ids)).group_by(Task.contact_id)
     )
     results = session.execute(stmt).all()
     return {contact_id: count for contact_id, count in results}
@@ -906,22 +845,14 @@ def get_task_counts_by_contacts(session: Session, contact_ids: list[int]) -> dic
 
 def get_gifts_by_contact(session: Session, contact_id: int) -> Sequence[ShoppingItem]:
     """Get all gift items linked to a contact."""
-    stmt = (
-        _shopping_item_query()
-        .where(ShoppingItem.contact_id == contact_id)
-        .order_by(ShoppingItem.created_at.desc())
-    )
+    stmt = _shopping_item_query().where(ShoppingItem.contact_id == contact_id).order_by(ShoppingItem.created_at.desc())
     return session.scalars(stmt).all()
 
 
 # UserCalendarToken CRUD
-def get_user_calendar_token(
-    session: Session, telegram_user_id: int
-) -> Optional[UserCalendarToken]:
+def get_user_calendar_token(session: Session, telegram_user_id: int) -> UserCalendarToken | None:
     """Get calendar token for a Telegram user."""
-    stmt = select(UserCalendarToken).where(
-        UserCalendarToken.telegram_user_id == telegram_user_id
-    )
+    stmt = select(UserCalendarToken).where(UserCalendarToken.telegram_user_id == telegram_user_id)
     return session.scalars(stmt).first()
 
 
@@ -929,12 +860,12 @@ def save_user_calendar_token(
     session: Session,
     telegram_user_id: int,
     access_token: str,
-    refresh_token: Optional[str],
+    refresh_token: str | None,
     token_uri: str,
     client_id: str,
     client_secret: str,
     scopes: list[str],
-    expiry: Optional[datetime] = None,
+    expiry: datetime | None = None,
 ) -> UserCalendarToken:
     """Save or update calendar token for a Telegram user."""
     import json
@@ -983,7 +914,7 @@ def update_user_calendar_token_credentials(
     session: Session,
     telegram_user_id: int,
     access_token: str,
-    expiry: Optional[datetime] = None,
+    expiry: datetime | None = None,
 ) -> bool:
     """Update just the access token and expiry after a refresh."""
     token = get_user_calendar_token(session, telegram_user_id)

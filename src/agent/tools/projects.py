@@ -1,26 +1,25 @@
-from typing import Optional
-
 from src.db import session_scope
 from src.db.queries import (
     bulk_update_tasks_project,
     create_user_project,
-    get_project_by_name,
-    get_user_project,
-    get_user_project_by_name,
-    list_user_projects as db_list_user_projects,
-    get_tasks_by_user_project,
     delete_user_project,
+    get_project_by_name,
+    get_tasks_by_user_project,
+    get_user_project_by_name,
     move_all_tasks_between_projects,
     update_task,
     update_user_project,
+)
+from src.db.queries import (
+    list_user_projects as db_list_user_projects,
 )
 
 
 def create_project(
     name: str,
-    description: Optional[str] = None,
+    description: str | None = None,
     emoji: str = "folder",
-    tag: Optional[str] = None,
+    tag: str | None = None,
 ) -> str:
     """Create a new project to organize related tasks.
 
@@ -46,7 +45,7 @@ def create_project(
             if tag_obj:
                 tag_id = tag_obj.id
 
-        project = create_user_project(
+        create_user_project(
             session,
             name=name,
             description=description,
@@ -91,15 +90,12 @@ def list_projects_tool(
         project_ids = [p.id for p in projects]
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
+
         from src.db.models import Task
-        
-        stmt = (
-            select(Task)
-            .options(selectinload(Task.project))
-            .where(Task.user_project_id.in_(project_ids))
-        )
+
+        stmt = select(Task).options(selectinload(Task.project)).where(Task.user_project_id.in_(project_ids))
         all_tasks = session.scalars(stmt).all()
-        
+
         # Group tasks by project
         tasks_by_project: dict[int, list] = {pid: [] for pid in project_ids}
         for task in all_tasks:
@@ -315,11 +311,10 @@ def update_project(
         # If not found by name (maybe archived), try looking up archived ones
         if not project and archived is False:
             from sqlalchemy import select
+
             from src.db.models import UserProject
-            stmt = select(UserProject).where(
-                UserProject.name.ilike(project_name),
-                UserProject.archived == True
-            )
+
+            stmt = select(UserProject).where(UserProject.name.ilike(project_name), UserProject.archived.is_(True))
             project = session.scalars(stmt).first()
 
         if not project:
@@ -343,7 +338,7 @@ def update_project(
         if new_emoji:
             changes.append(f"emoji -> {new_emoji}")
         if new_description:
-            changes.append(f"description updated")
+            changes.append("description updated")
         if archived is True:
             changes.append("archived")
         if archived is False:

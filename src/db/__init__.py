@@ -1,6 +1,6 @@
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Generator
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -41,14 +41,16 @@ def init_database(database_path: Path) -> None:
     _engine = create_engine(database_url)
     Base.metadata.create_all(_engine)
     _SessionLocal = sessionmaker(bind=_engine)
-    
+
     # Run pending migrations
     from .migrations import run_migrations
+
     with session_scope() as session:
         run_migrations(session)
 
     # Seed default projects and shopping lists
     from .queries import seed_default_projects, seed_default_shopping_lists
+
     with session_scope() as session:
         seed_default_projects(session)
         seed_default_shopping_lists(session)

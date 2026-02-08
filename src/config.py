@@ -1,9 +1,9 @@
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
-import os
 
 load_dotenv()
 
@@ -42,12 +42,8 @@ class Settings:
         if not openai_api_key:
             raise ValueError("OPENAI_API_KEY is required")
 
-        google_credentials_path = Path(
-            os.environ.get("GOOGLE_CREDENTIALS_PATH", "credentials/google_credentials.json")
-        )
-        google_token_path = Path(
-            os.environ.get("GOOGLE_TOKEN_PATH", "credentials/google_token.json")
-        )
+        google_credentials_path = Path(os.environ.get("GOOGLE_CREDENTIALS_PATH", "credentials/google_credentials.json"))
+        google_token_path = Path(os.environ.get("GOOGLE_TOKEN_PATH", "credentials/google_token.json"))
         database_path = Path(os.environ.get("DATABASE_PATH", "data/minion.db"))
 
         tz_name = os.environ.get("TIMEZONE", "America/Sao_Paulo")
@@ -56,13 +52,9 @@ class Settings:
         # Web server settings
         web_host = os.environ.get("WEB_HOST", "0.0.0.0")
         web_port = int(os.environ.get("WEB_PORT", "21125"))
-        web_base_url = os.environ.get(
-            "WEB_BASE_URL", "https://miniongoogleauth.enzomaruffa.dev"
-        )
+        web_base_url = os.environ.get("WEB_BASE_URL", "https://miniongoogleauth.enzomaruffa.dev")
 
-        silverbullet_space_path = Path(
-            os.environ.get("SILVERBULLET_SPACE_PATH", "")
-        )
+        silverbullet_space_path = Path(os.environ.get("SILVERBULLET_SPACE_PATH", ""))
 
         agent_model = os.environ.get("AGENT_MODEL", "gpt-5.2")
         memory_model = os.environ.get("MEMORY_MODEL", "gpt-5-mini")

@@ -1,26 +1,29 @@
 from datetime import datetime
-from typing import Optional
 
 from src.config import settings
 from src.db import session_scope
-from src.utils import parse_date, days_until_birthday, format_birthday_proximity
 from src.db.queries import (
     create_contact,
     delete_contact,
     get_contact,
     get_task_counts_by_contacts,
     get_tasks_by_contact,
-    list_contacts as db_list_contacts,
     list_upcoming_birthdays,
+)
+from src.db.queries import (
+    list_contacts as db_list_contacts,
+)
+from src.db.queries import (
     update_contact as db_update_contact,
 )
+from src.utils import days_until_birthday, format_birthday_proximity, parse_date
 
 
 def add_contact(
     name: str,
-    aliases: Optional[str] = None,
-    birthday: Optional[str] = None,
-    notes: Optional[str] = None,
+    aliases: str | None = None,
+    birthday: str | None = None,
+    notes: str | None = None,
 ) -> str:
     """Add a new contact with optional birthday and aliases.
 
@@ -106,17 +109,18 @@ def upcoming_birthdays(days: int = 14) -> str:
                 this_year_bday = bday.replace(year=today.year)
                 if this_year_bday < today:
                     this_year_bday = bday.replace(year=today.year + 1)
-                lines.append(f"  #{contact.id} {contact.name} - {this_year_bday.strftime('%B %d')} ({format_birthday_proximity(d)})")
+                proximity = format_birthday_proximity(d)
+                lines.append(f"  #{contact.id} {contact.name} - {this_year_bday.strftime('%B %d')} ({proximity})")
 
         return "\n".join(lines)
 
 
 def update_contact_tool(
     contact_id: int,
-    name: Optional[str] = None,
-    aliases: Optional[str] = None,
-    birthday: Optional[str] = None,
-    notes: Optional[str] = None,
+    name: str | None = None,
+    aliases: str | None = None,
+    birthday: str | None = None,
+    notes: str | None = None,
     clear_birthday: bool = False,
     clear_aliases: bool = False,
 ) -> str:
@@ -202,7 +206,8 @@ def get_contact_tasks(contact_id: int) -> str:
         for task in tasks:
             project_emoji = task.project.emoji + " " if task.project else ""
             due = f" {task.due_date.strftime('%b %d')}" if task.due_date else ""
-            status_icon = {"todo": "[ ]", "in_progress": "[~]", "done": "[x]", "cancelled": "[-]"}.get(task.status.value, "")
+            status_map = {"todo": "[ ]", "in_progress": "[~]", "done": "[x]", "cancelled": "[-]"}
+            status_icon = status_map.get(task.status.value, "")
             lines.append(f"  #{task.id} {project_emoji}{task.title}{due} {status_icon}")
 
         return "\n".join(lines)

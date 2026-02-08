@@ -2,7 +2,6 @@ import logging
 import uuid
 from datetime import datetime
 
-from telegram import Update
 from telegram.error import BadRequest
 from telegram.ext import (
     Application,
@@ -12,30 +11,29 @@ from telegram.ext import (
     filters,
 )
 
+from src.agent import chat
+from src.config import settings
+from src.integrations.vision import extract_task_from_image
+from src.integrations.voice import transcribe_voice
 from src.telegram.commands import (
-    tasks_command,
-    today_command,
-    calendar_command,
-    help_command,
     auth_command,
-    contacts_command,
     birthdays_command,
-    groceries_command,
+    calendar_command,
+    clear_command_context,
+    contacts_command,
+    get_last_command_context,
     gifts_command,
-    wishlist_command,
+    groceries_command,
+    help_command,
     lists_command,
     projects_command,
     reminders_command,
-    get_last_command_context,
-    clear_command_context,
-    is_authorized,
     require_auth,
+    tasks_command,
+    today_command,
+    wishlist_command,
 )
-
-from src.config import settings
-from src.agent import chat
-from src.integrations.voice import transcribe_voice
-from src.integrations.vision import extract_task_from_image
+from telegram import Update
 
 logger = logging.getLogger(__name__)
 
@@ -72,9 +70,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await safe_reply(update.message, response)
     except Exception as e:
         logger.exception("Error processing message")
-        await update.message.reply_text(
-            f"Sorry, I encountered an error: {str(e)[:100]}"
-        )
+        await update.message.reply_text(f"Sorry, I encountered an error: {str(e)[:100]}")
 
 
 @require_auth
@@ -107,9 +103,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await safe_reply(update.message, response)
     except Exception as e:
         logger.exception("Error processing voice message")
-        await update.message.reply_text(
-            f"Sorry, I couldn't process that voice message: {str(e)[:100]}"
-        )
+        await update.message.reply_text(f"Sorry, I couldn't process that voice message: {str(e)[:100]}")
 
 
 @require_auth
@@ -144,15 +138,13 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await safe_reply(update.message, response)
     except Exception as e:
         logger.exception("Error processing photo")
-        await update.message.reply_text(
-            f"Sorry, I couldn't process that image: {str(e)[:100]}"
-        )
+        await update.message.reply_text(f"Sorry, I couldn't process that image: {str(e)[:100]}")
 
 
 async def register_commands(application: Application) -> None:
     """Register bot commands with Telegram for the menu."""
     from telegram import BotCommand
-    
+
     commands = [
         BotCommand("tasks", "Pending tasks"),
         BotCommand("today", "Today's agenda"),
@@ -196,9 +188,7 @@ def create_application() -> Application:
     application.add_handler(CommandHandler("birthdays", birthdays_command))
 
     # Add message handler for text messages
-    application.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)
-    )
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     # Add voice message handler
     application.add_handler(MessageHandler(filters.VOICE, handle_voice))
@@ -239,11 +229,11 @@ _ERROR_RATE_LIMIT_SECONDS = 60
 
 async def notify_error(tool_name: str, error: Exception, error_id: str | None = None) -> None:
     """Send an error notification to the user.
-    
+
     Rate limited to 1 per minute per tool to avoid spam.
     """
     global _last_error_notification
-    
+
     # Rate limit by tool name
     now = datetime.now()
     if len(_last_error_notification) > _MAX_ERROR_ENTRIES:
@@ -253,21 +243,17 @@ async def notify_error(tool_name: str, error: Exception, error_id: str | None = 
         if elapsed < _ERROR_RATE_LIMIT_SECONDS:
             logger.debug(f"Skipping error notification for {tool_name}, rate limited")
             return
-    
+
     _last_error_notification[tool_name] = now
-    
+
     if not error_id:
         error_id = str(uuid.uuid4())[:8]
-    
+
     # Brief error message without sensitive details
     error_msg = str(error)[:100]
-    
-    text = (
-        f"⚠️ Error in <code>{tool_name}</code>\n"
-        f"{error_msg}\n"
-        f"ID: <code>{error_id}</code>"
-    )
-    
+
+    text = f"⚠️ Error in <code>{tool_name}</code>\n{error_msg}\nID: <code>{error_id}</code>"
+
     try:
         await send_message(text)
     except Exception as e:

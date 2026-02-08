@@ -1,14 +1,12 @@
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from functools import wraps
-from typing import Callable
 
-from telegram import Update
 from telegram.ext import ContextTypes
 
-from src.agent.tools import get_agenda, list_tasks, list_projects_tool, list_reminders
+from src.agent.tools import get_agenda, list_projects_tool, list_reminders, list_tasks
 from src.config import settings
 from src.db import session_scope
-from src.utils import days_until_birthday, format_birthday_proximity
 from src.db.models import ShoppingListType
 from src.db.queries import (
     list_calendar_events_range,
@@ -20,6 +18,8 @@ from src.integrations.calendar import (
     is_calendar_connected,
     is_calendar_connected_for_user,
 )
+from src.utils import days_until_birthday, format_birthday_proximity
+from telegram import Update
 
 # Track last command output for agent context injection
 _last_command_context: dict | None = None
@@ -32,17 +32,19 @@ def is_authorized(user_id: int) -> bool:
 
 def require_auth(func: Callable) -> Callable:
     """Decorator that requires user authorization for command handlers."""
+
     @wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not update.message:
             return
-        
+
         user_id = update.effective_user.id if update.effective_user else None
         if not user_id or not is_authorized(user_id):
             await update.message.reply_text("Not authorized.")
             return
-        
+
         return await func(update, context)
+
     return wrapper
 
 
@@ -201,7 +203,7 @@ async def birthdays_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         for contact in contacts:
             if contact.birthday:
                 d = days_until_birthday(contact.birthday, today)
-                bday = contact.birthday.date() if hasattr(contact.birthday, 'date') else contact.birthday
+                bday = contact.birthday.date() if hasattr(contact.birthday, "date") else contact.birthday
                 this_year_bday = bday.replace(year=today.year)
                 if this_year_bday < today:
                     this_year_bday = bday.replace(year=today.year + 1)
@@ -286,7 +288,7 @@ async def lists_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     """Handle /lists command - show all shopping lists."""
     with session_scope() as session:
         all_items = list_shopping_items(session, include_checked=True)
-        
+
         parts = []
         for lt, title in [
             (ShoppingListType.GROCERIES, "Groceries"),

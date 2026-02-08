@@ -1,5 +1,3 @@
-from typing import Optional
-
 from src.db import session_scope
 from src.db.queries import (
     create_reminder,
@@ -12,7 +10,7 @@ from src.utils import parse_date
 def set_reminder(
     message: str,
     remind_at: str,
-    task_id: Optional[int] = None,
+    task_id: int | None = None,
 ) -> str:
     """Set a reminder for a specific time.
 

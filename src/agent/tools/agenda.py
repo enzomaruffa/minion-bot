@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-from typing import Optional
 
 from src.config import settings
 from src.db import session_scope
@@ -10,10 +9,10 @@ from src.db.queries import (
     list_pending_reminders,
     list_tasks_due_on_date,
 )
-from src.utils import parse_date, format_date
+from src.utils import parse_date
 
 
-def get_agenda(date: Optional[str] = None) -> str:
+def get_agenda(date: str | None = None) -> str:
     """Get the agenda for a specific date, including tasks, calendar events, and reminders.
 
     Args:
@@ -24,10 +23,7 @@ def get_agenda(date: Optional[str] = None) -> str:
     """
     if date:
         parsed = parse_date(date)
-        if parsed:
-            target_date = parsed.replace(tzinfo=settings.timezone)
-        else:
-            target_date = datetime.now(settings.timezone)
+        target_date = parsed.replace(tzinfo=settings.timezone) if parsed else datetime.now(settings.timezone)
     else:
         target_date = datetime.now(settings.timezone)
 
@@ -54,10 +50,7 @@ def get_agenda(date: Optional[str] = None) -> str:
 
         # Get reminders for today
         reminders = list_pending_reminders(session, day_end.replace(tzinfo=None))
-        today_reminders = [
-            r for r in reminders
-            if r.remind_at >= day_start.replace(tzinfo=None)
-        ]
+        today_reminders = [r for r in reminders if r.remind_at >= day_start.replace(tzinfo=None)]
 
         # Format output while session is still open (to access relationships)
         lines = []

@@ -1,7 +1,6 @@
 import json
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -9,7 +8,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
 from src.config import settings
-from src.db import get_session, session_scope
+from src.db import session_scope
 from src.db.queries import (
     get_user_calendar_token,
     sync_calendar_event,
@@ -21,31 +20,31 @@ logger = logging.getLogger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/calendar"]  # Full read/write access
 
 # Store pending auth flow for bot-based authentication
-_pending_flow: Optional[InstalledAppFlow] = None
+_pending_flow: InstalledAppFlow | None = None
 
 
-def get_auth_url() -> Optional[str]:
+def get_auth_url() -> str | None:
     """Generate OAuth URL for bot-based authentication.
-    
+
     Returns:
         Authorization URL to send to user, or None if credentials file missing.
     """
     global _pending_flow
-    
+
     logger.info(f"Checking for credentials at: {settings.google_credentials_path}")
     logger.info(f"Credentials file exists: {settings.google_credentials_path.exists()}")
-    
+
     if not settings.google_credentials_path.exists():
         logger.warning("Google credentials file not found at %s", settings.google_credentials_path)
         return None
-    
+
     try:
         _pending_flow = InstalledAppFlow.from_client_secrets_file(
-            str(settings.google_credentials_path), 
+            str(settings.google_credentials_path),
             SCOPES,
-            redirect_uri="http://localhost"  # Localhost redirect - user copies code from URL
+            redirect_uri="http://localhost",  # Localhost redirect - user copies code from URL
         )
-        
+
         auth_url, _ = _pending_flow.authorization_url(
             prompt="select_account consent",
             access_type="offline",  # Get refresh token
@@ -59,31 +58,31 @@ def get_auth_url() -> Optional[str]:
 
 def complete_auth(code: str) -> bool:
     """Complete OAuth flow with authorization code from user.
-    
+
     Args:
         code: The authorization code from Google.
-        
+
     Returns:
         True if successful, False otherwise.
     """
     global _pending_flow
-    
+
     logger.info("Completing auth with authorization code")
-    
+
     if not _pending_flow:
         logger.error("No pending auth flow. Call get_auth_url first.")
         return False
-    
+
     try:
         _pending_flow.fetch_token(code=code)
         creds = _pending_flow.credentials
-        
+
         # Save credentials
         logger.info(f"Saving token to: {settings.google_token_path}")
         settings.google_token_path.parent.mkdir(parents=True, exist_ok=True)
         with open(settings.google_token_path, "w") as token:
             token.write(creds.to_json())
-        
+
         logger.info("Google Calendar authorization successful, token saved")
         _pending_flow = None
         return True
@@ -99,9 +98,7 @@ def is_calendar_connected() -> bool:
         return False
 
     try:
-        creds = Credentials.from_authorized_user_file(
-            str(settings.google_token_path), SCOPES
-        )
+        creds = Credentials.from_authorized_user_file(str(settings.google_token_path), SCOPES)
         return creds and creds.valid
     except Exception:
         return False
@@ -123,10 +120,10 @@ def _is_token_expired(token) -> bool:
     """Check if a token is expired."""
     if not token.expiry:
         return False
-    return token.expiry < datetime.now(timezone.utc)
+    return token.expiry < datetime.now(UTC)
 
 
-def get_credentials_for_user(telegram_user_id: int) -> Optional[Credentials]:
+def get_credentials_for_user(telegram_user_id: int) -> Credentials | None:
     """Get or refresh Google Calendar credentials for a specific user.
 
     Args:
@@ -192,9 +189,9 @@ def get_service_for_user(telegram_user_id: int):
     return build("calendar", "v3", credentials=creds)
 
 
-def get_credentials(headless: bool = False) -> Optional[Credentials]:
+def get_credentials(headless: bool = False) -> Credentials | None:
     """Get or refresh Google Calendar credentials.
-    
+
     Args:
         headless: If True, use console-based auth flow (prints URL to visit).
     """
@@ -202,9 +199,7 @@ def get_credentials(headless: bool = False) -> Optional[Credentials]:
 
     # Load existing token
     if settings.google_token_path.exists():
-        creds = Credentials.from_authorized_user_file(
-            str(settings.google_token_path), SCOPES
-        )
+        creds = Credentials.from_authorized_user_file(str(settings.google_token_path), SCOPES)
 
     # Refresh or get new credentials
     if creds and creds.expired and creds.refresh_token:
@@ -214,15 +209,9 @@ def get_credentials(headless: bool = False) -> Optional[Credentials]:
             logger.warning("Google credentials file not found at %s", settings.google_credentials_path)
             return None
 
-        flow = InstalledAppFlow.from_client_secrets_file(
-            str(settings.google_credentials_path), SCOPES
-        )
-        
-        if headless:
-            # For headless servers - prints URL to visit
-            creds = flow.run_console()
-        else:
-            creds = flow.run_local_server(port=0)
+        flow = InstalledAppFlow.from_client_secrets_file(str(settings.google_credentials_path), SCOPES)
+
+        creds = flow.run_console() if headless else flow.run_local_server(port=0)
 
     # Save credentials
     if creds:
@@ -233,9 +222,7 @@ def get_credentials(headless: bool = False) -> Optional[Credentials]:
     return creds
 
 
-def fetch_events(
-    start: datetime, end: datetime, telegram_user_id: int | None = None
-) -> list[dict]:
+def fetch_events(start: datetime, end: datetime, telegram_user_id: int | None = None) -> list[dict]:
     """Fetch calendar events from Google Calendar.
 
     Args:
@@ -280,9 +267,9 @@ def sync_events(start: datetime, end: datetime) -> int:
         Number of events synced.
     """
     from src.db import session_scope
-    
+
     events = fetch_events(start, end)
-    
+
     count = 0
     with session_scope() as session:
         for event in events:
@@ -372,10 +359,10 @@ def create_event(
     title: str,
     start: datetime,
     end: datetime,
-    description: Optional[str] = None,
-    location: Optional[str] = None,
+    description: str | None = None,
+    location: str | None = None,
     telegram_user_id: int | None = None,
-) -> Optional[dict]:
+) -> dict | None:
     """Create a new calendar event.
 
     Args:
@@ -410,13 +397,13 @@ def create_event(
 
 def update_event(
     event_id: str,
-    title: Optional[str] = None,
-    start: Optional[datetime] = None,
-    end: Optional[datetime] = None,
-    description: Optional[str] = None,
-    location: Optional[str] = None,
+    title: str | None = None,
+    start: datetime | None = None,
+    end: datetime | None = None,
+    description: str | None = None,
+    location: str | None = None,
     telegram_user_id: int | None = None,
-) -> Optional[dict]:
+) -> dict | None:
     """Update an existing calendar event.
 
     Args:
@@ -438,7 +425,7 @@ def update_event(
     try:
         # Get existing event
         event = service.events().get(calendarId="primary", eventId=event_id).execute()
-        
+
         # Update fields
         if title:
             event["summary"] = title
@@ -450,7 +437,7 @@ def update_event(
             event["start"] = {"dateTime": start.isoformat(), "timeZone": str(settings.timezone)}
         if end:
             event["end"] = {"dateTime": end.isoformat(), "timeZone": str(settings.timezone)}
-        
+
         result = service.events().update(calendarId="primary", eventId=event_id, body=event).execute()
         return {"id": result.get("id"), "link": result.get("htmlLink")}
     except Exception as e:
@@ -480,9 +467,7 @@ def delete_event(event_id: str, telegram_user_id: int | None = None) -> bool:
         return False
 
 
-def list_upcoming_events(
-    days: int = 7, max_results: int = 20, telegram_user_id: int | None = None
-) -> list[dict]:
+def list_upcoming_events(days: int = 7, max_results: int = 20, telegram_user_id: int | None = None) -> list[dict]:
     """List upcoming calendar events.
 
     Args:
@@ -497,7 +482,7 @@ def list_upcoming_events(
     if not service:
         return []
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     end = now + timedelta(days=days)
 
     try:

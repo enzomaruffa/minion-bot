@@ -3,6 +3,7 @@
 Reads/writes markdown files directly from a mounted Silverbullet space directory.
 """
 
+import contextlib
 import logging
 import os
 import tempfile
@@ -24,10 +25,8 @@ def _atomic_write(path: Path, content: str) -> None:
         os.close(fd)
         os.replace(tmp, path)
     except Exception:
-        try:
+        with contextlib.suppress(OSError):
             os.close(fd)
-        except OSError:
-            pass
         if os.path.exists(tmp):
             os.unlink(tmp)
         raise

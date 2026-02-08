@@ -27,6 +27,34 @@ packages = ["src"]
 
 [dependency-groups]
 dev = [
+    "pre-commit>=4.5.1",
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0",
+    "ruff>=0.15.0",
+    "ty>=0.0.15",
 ]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "UP",    # pyupgrade — all upgrade rules
+    "I",     # isort
+    "B",     # flake8-bugbear
+    "SIM",   # flake8-simplify
+    "TCH",   # flake8-type-checking
+]
+ignore = [
+    "E712",  # SQLAlchemy requires == True/False for SQL generation
+]
+
+[tool.ruff.lint.per-file-ignores]
+"src/db/queries.py" = ["SIM108"]  # Ternary not always clearer for query builders
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]

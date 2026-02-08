@@ -1,23 +1,24 @@
 from datetime import datetime
-from typing import Optional
 
 from src.config import settings
 from src.db import session_scope
-from src.utils import parse_date, format_date
 from src.db.models import Task, TaskPriority, TaskStatus
 from src.db.queries import (
     create_task,
     delete_task,
     get_contact_by_name,
     get_project_by_name,
-    get_task,
     get_subtasks,
-    list_projects as db_list_projects,
+    get_task,
+    list_attachments_by_task,
     list_tasks_by_status,
     search_tasks,
     update_task,
-    list_attachments_by_task,
 )  # get_subtasks still used in get_task_details
+from src.db.queries import (
+    list_projects as db_list_projects,
+)
+from src.utils import format_date, parse_date
 
 
 def add_tasks(tasks: list[dict]) -> str:
@@ -84,13 +85,13 @@ def add_tasks(tasks: list[dict]) -> str:
 
 def update_task_tool(
     task_id: int,
-    title: Optional[str] = None,
-    description: Optional[str] = None,
-    status: Optional[str] = None,
-    priority: Optional[str] = None,
-    due_date: Optional[str] = None,
-    project: Optional[str] = None,
-    contact: Optional[str] = None,
+    title: str | None = None,
+    description: str | None = None,
+    status: str | None = None,
+    priority: str | None = None,
+    due_date: str | None = None,
+    project: str | None = None,
+    contact: str | None = None,
 ) -> str:
     """Update an existing task.
 
@@ -189,13 +190,13 @@ def _format_task_line(task: Task, indent: int = 0) -> str:
     prefix = "  " if indent > 0 else ""
     project_emoji = task.project.emoji + " " if task.project else ""
     contact_info = f" {task.contact.name}" if task.contact else ""
-    
+
     # Check if overdue
     now = datetime.now(settings.timezone).replace(tzinfo=None)
     overdue_badge = ""
     if task.due_date and task.due_date < now and task.status.value in ("todo", "in_progress"):
         overdue_badge = " OVERDUE"
-    
+
     due = f" {format_date(task.due_date)}" if task.due_date else ""
     status_icon = {"todo": "[ ]", "in_progress": "[~]", "done": "[x]", "cancelled": "[-]"}.get(task.status.value, "")
     return f"{prefix}{status_icon} #{task.id} {project_emoji}{task.title}{contact_info}{due}{overdue_badge}"
@@ -218,8 +219,8 @@ def _format_task_with_subtasks(task: Task, tree: dict[int | None, list[Task]], i
 
 
 def list_tasks(
-    status: Optional[str] = None,
-    project: Optional[str] = None,
+    status: str | None = None,
+    project: str | None = None,
     include_subtasks: bool = True,
 ) -> str:
     """List tasks, optionally filtered by status and/or project.
@@ -367,10 +368,10 @@ def delete_task_tool(task_id: int) -> str:
 def add_subtask(
     parent_id: int,
     title: str,
-    description: Optional[str] = None,
-    priority: Optional[str] = None,
-    due_date: Optional[str] = None,
-    project: Optional[str] = None,
+    description: str | None = None,
+    priority: str | None = None,
+    due_date: str | None = None,
+    project: str | None = None,
 ) -> str:
     """Add a subtask to an existing task.
 
@@ -414,7 +415,7 @@ def add_subtask(
         return f"Created subtask #{task.id} under parent #{parent_id}: {title}"
 
 
-def move_task(task_id: int, new_parent_id: Optional[int] = None) -> str:
+def move_task(task_id: int, new_parent_id: int | None = None) -> str:
     """Move a task to become a subtask of another task, or make it a root task.
 
     Args:

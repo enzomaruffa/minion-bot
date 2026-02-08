@@ -1,7 +1,5 @@
 """Agent tools for Silverbullet notes integration."""
 
-from typing import Optional
-
 from src.integrations.silverbullet import (
     append_to_note,
     create_note,

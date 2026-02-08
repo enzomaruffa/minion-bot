@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 
 from src.agent.tools.agenda import get_agenda
 from src.config import settings
-from src.utils import days_until_birthday, format_birthday_proximity
 from src.db import session_scope
 from src.db.models import TaskPriority, TaskStatus
 from src.db.queries import (
@@ -17,6 +16,7 @@ from src.db.queries import (
     update_task,
 )
 from src.telegram.bot import send_message
+from src.utils import days_until_birthday, format_birthday_proximity
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +46,7 @@ async def eod_review() -> None:
             # Get tasks completed today
             done_tasks = list_tasks_by_status(session, TaskStatus.DONE)
             completed_today = [
-                t for t in done_tasks
-                if t.updated_at and t.updated_at >= today_start.replace(tzinfo=None)
+                t for t in done_tasks if t.updated_at and t.updated_at >= today_start.replace(tzinfo=None)
             ]
 
             # Get incomplete tasks
@@ -118,12 +117,12 @@ async def deliver_reminders() -> None:
 async def proactive_intelligence() -> None:
     """Smart nudges and suggestions sent proactively."""
     logger.info("Running proactive intelligence job")
-    
+
     try:
         with session_scope() as session:
             now = datetime.now(settings.timezone).replace(tzinfo=None)
             messages = []
-            
+
             # 1. Priority escalation: bump priority for tasks due within 24h
             due_soon = list_tasks_due_soon(session, now, within_hours=24)
             escalated = []
@@ -131,13 +130,13 @@ async def proactive_intelligence() -> None:
                 if task.priority in [TaskPriority.LOW, TaskPriority.MEDIUM]:
                     update_task(session, task.id, priority=TaskPriority.HIGH)
                     escalated.append(task)
-            
+
             if escalated:
                 task_list = ", ".join([f"#{t.id}" for t in escalated[:5]])
                 if len(escalated) > 5:
                     task_list += f" and {len(escalated) - 5} more"
                 messages.append(f"Priority escalated for tasks due within 24h: {task_list}")
-            
+
             # 2. Overdue nudges
             overdue = list_overdue_tasks(session, now)
             if overdue:
@@ -149,29 +148,23 @@ async def proactive_intelligence() -> None:
                 if len(overdue) > 5:
                     lines.append(f"  ... and {len(overdue) - 5} more")
                 messages.append("\n".join(lines))
-            
+
             # 3. Smart scheduling: warn about overloaded days
             tomorrow = now + timedelta(days=1)
             tomorrow_count = count_tasks_by_due_date(session, tomorrow)
             if tomorrow_count >= 5:
-                messages.append(
-                    f"You have {tomorrow_count} tasks due tomorrow. "
-                    "Consider rescheduling some if needed."
-                )
-            
+                messages.append(f"You have {tomorrow_count} tasks due tomorrow. Consider rescheduling some if needed.")
+
             # 4. Breakdown suggestions for complex tasks
             todo_tasks = list_tasks_by_status(session, TaskStatus.TODO, root_only=True)
-            complex_tasks = [
-                t for t in todo_tasks
-                if len(t.title) > 50 or (t.description and len(t.description) > 200)
-            ]
+            complex_tasks = [t for t in todo_tasks if len(t.title) > 50 or (t.description and len(t.description) > 200)]
             if complex_tasks:
                 task = complex_tasks[0]  # Just suggest for one at a time
                 messages.append(
                     f"Task #{task.id} seems complex. Consider breaking it into subtasks:\n"
-                    f"  \"{task.title[:60]}{'...' if len(task.title) > 60 else ''}\""
+                    f'  "{task.title[:60]}{"..." if len(task.title) > 60 else ""}"'
                 )
-            
+
             # 5. Upcoming birthdays (within 7 days)
             upcoming_contacts = list_upcoming_birthdays(session, within_days=7)
             if upcoming_contacts:
@@ -190,7 +183,7 @@ async def proactive_intelligence() -> None:
             logger.info(f"Sent proactive intelligence message with {len(messages)} nudges")
         else:
             logger.info("No proactive nudges needed")
-            
+
     except Exception as e:
         logger.exception(f"Error in proactive intelligence job: {e}")
 

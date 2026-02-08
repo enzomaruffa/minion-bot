@@ -1,5 +1,5 @@
+import contextlib
 import re
-from typing import Optional
 
 from src.db import session_scope
 from src.db.models import ItemPriority, ShoppingListType
@@ -15,14 +15,37 @@ from src.db.queries import (
     purchase_shopping_item,
 )
 
-
 # Keywords for auto-inference
-GIFT_KEYWORDS = {"gift", "present", "birthday", "christmas", "anniversary", "for mom", "for dad", "for him", "for her"}
+GIFT_KEYWORDS = {
+    "gift",
+    "present",
+    "birthday",
+    "christmas",
+    "anniversary",
+    "for mom",
+    "for dad",
+    "for him",
+    "for her",
+}
 WISHLIST_KEYWORDS = {"wish", "want", "someday", "dream", "would love", "maybe", "eventually", "save up"}
-GROCERY_KEYWORDS = {"grocery", "groceries", "milk", "bread", "eggs", "cleaning", "toilet", "soap", "food", "fruit", "vegetable", "meat", "cheese"}
+GROCERY_KEYWORDS = {
+    "grocery",
+    "groceries",
+    "milk",
+    "bread",
+    "eggs",
+    "cleaning",
+    "toilet",
+    "soap",
+    "food",
+    "fruit",
+    "vegetable",
+    "meat",
+    "cheese",
+}
 
 
-def _infer_list_type(item: str, recipient: Optional[str] = None) -> ShoppingListType:
+def _infer_list_type(item: str, recipient: str | None = None) -> ShoppingListType:
     """Auto-infer the list type based on item text and recipient."""
     item_lower = item.lower()
 
@@ -60,10 +83,10 @@ def _parse_quantity(item: str) -> tuple[str, int]:
 
 def add_to_list(
     item: str,
-    list_type: Optional[str] = None,
-    notes: Optional[str] = None,
-    recipient: Optional[str] = None,
-    priority: Optional[str] = None,
+    list_type: str | None = None,
+    notes: str | None = None,
+    recipient: str | None = None,
+    priority: str | None = None,
 ) -> str:
     """Add an item to a shopping list.
 
@@ -93,10 +116,8 @@ def add_to_list(
     # Parse priority
     prio = ItemPriority.MEDIUM
     if priority:
-        try:
+        with contextlib.suppress(ValueError):
             prio = ItemPriority(priority.lower())
-        except ValueError:
-            pass
 
     with session_scope() as session:
         # Try to resolve recipient to a contact
@@ -124,7 +145,7 @@ def add_to_list(
         return f"Added to {lt.value.title()}: #{shopping_item.id} {item_name}{quantity_info}{recipient_info}"
 
 
-def show_list(list_type: Optional[str] = None, include_checked: bool = False) -> str:
+def show_list(list_type: str | None = None, include_checked: bool = False) -> str:
     """Show shopping list items grouped by list type.
 
     Args:
@@ -273,7 +294,7 @@ def remove_item(item_id: int) -> str:
         return f"Failed to remove item #{item_id}."
 
 
-def clear_checked(list_type: Optional[str] = None) -> str:
+def clear_checked(list_type: str | None = None) -> str:
     """Clear all checked items from shopping lists.
 
     Args:

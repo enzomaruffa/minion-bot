@@ -1,15 +1,13 @@
 """FastAPI web server for Google Calendar OAuth callbacks."""
 
 import html
-import json
 import logging
 import secrets
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
-from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 
 from src.config import settings
@@ -79,14 +77,14 @@ async def start_auth(telegram_user_id: int):
         logger.info(f"Starting OAuth for user {telegram_user_id}")
         return RedirectResponse(url=auth_url)
 
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         raise HTTPException(
             status_code=500,
             detail="Google credentials not configured. Upload credentials.json first.",
-        )
+        ) from e
     except Exception as e:
         logger.exception(f"Failed to start OAuth: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.get("/auth/callback")
@@ -164,7 +162,7 @@ async def auth_status(telegram_user_id: int):
             return {"connected": False}
 
         # Check if token is expired
-        is_expired = token.expiry and token.expiry < datetime.now(timezone.utc)
+        is_expired = token.expiry and token.expiry < datetime.now(UTC)
 
         return {
             "connected": True,

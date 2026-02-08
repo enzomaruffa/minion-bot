@@ -2,7 +2,8 @@ import asyncio
 import logging
 import time
 import uuid
-from typing import Any, Callable, Dict
+from collections.abc import Callable
+from typing import Any
 
 from agno.agent import Agent
 from agno.db.sqlite import SqliteDb
@@ -14,13 +15,11 @@ from src.config import settings
 logger = logging.getLogger(__name__)
 
 
-def tool_logger_hook(
-    function_name: str, function_call: Callable, arguments: Dict[str, Any]
-) -> Any:
+def tool_logger_hook(function_name: str, function_call: Callable, arguments: dict[str, Any]) -> Any:
     """Log tool calls with execution time and send error notifications."""
     logger.info(f"Tool call: {function_name}({list(arguments.keys())})")
     start_time = time.time()
-    
+
     try:
         result = function_call(**arguments)
         duration = time.time() - start_time
@@ -30,10 +29,11 @@ def tool_logger_hook(
         duration = time.time() - start_time
         error_id = str(uuid.uuid4())[:8]
         logger.exception(f"Tool {function_name} failed after {duration:.2f}s: {e} (ID: {error_id})")
-        
+
         # Send async error notification
         try:
             from src.telegram.bot import notify_error
+
             loop = asyncio.get_running_loop()
             loop.create_task(notify_error(function_name, e, error_id))
         except RuntimeError:
@@ -41,64 +41,66 @@ def tool_logger_hook(
             pass
         except Exception as notify_err:
             logger.debug(f"Could not send error notification: {notify_err}")
-        
+
         raise
-from src.agent.tools import (
-    get_current_datetime,
-    add_tasks,
-    update_task_tool,
-    complete_task,
-    get_overdue_tasks,
-    list_tasks,
-    search_tasks_tool,
-    get_task_details,
-    delete_task_tool,
-    add_subtask,
-    move_task,
-    list_tags,
-    # Project tools
-    create_project,
-    list_projects_tool,
-    show_project,
-    assign_to_project,
-    unassign_from_project,
-    archive_project,
-    assign_tasks_to_project,
-    move_project_tasks,
-    update_project,
-    # Reminder tools
-    set_reminder,
-    list_reminders,
-    cancel_reminder,
-    get_agenda,
-    test_calendar,
-    create_calendar_event,
-    update_calendar_event,
-    delete_calendar_event,
-    list_calendar_events,
-    # Shopping tools
-    add_to_list,
-    show_list,
-    check_item,
-    uncheck_item,
-    remove_item,
-    clear_checked,
-    show_gifts_for_contact,
-    purchase_item,
+
+
+from src.agent.tools import (  # noqa: E402 — must follow tool_logger_hook definition
     # Contact tools
     add_contact,
-    show_contacts,
-    upcoming_birthdays,
-    update_contact_tool,
-    remove_contact,
-    get_contact_tasks,
+    add_subtask,
+    add_tasks,
+    # Shopping tools
+    add_to_list,
+    append_to_note_tool,
+    archive_project,
+    assign_tasks_to_project,
+    assign_to_project,
     # Notes tools
     browse_notes,
-    read_note_tool,
+    cancel_reminder,
+    check_item,
+    clear_checked,
+    complete_task,
+    create_calendar_event,
     create_note_tool,
-    update_note_tool,
-    append_to_note_tool,
+    # Project tools
+    create_project,
+    delete_calendar_event,
+    delete_task_tool,
+    get_agenda,
+    get_contact_tasks,
+    get_current_datetime,
+    get_overdue_tasks,
+    get_task_details,
+    list_calendar_events,
+    list_projects_tool,
+    list_reminders,
+    list_tags,
+    list_tasks,
+    move_project_tasks,
+    move_task,
+    purchase_item,
+    read_note_tool,
+    remove_contact,
+    remove_item,
     search_notes_tool,
+    search_tasks_tool,
+    # Reminder tools
+    set_reminder,
+    show_contacts,
+    show_gifts_for_contact,
+    show_list,
+    show_project,
+    test_calendar,
+    unassign_from_project,
+    uncheck_item,
+    upcoming_birthdays,
+    update_calendar_event,
+    update_contact_tool,
+    update_note_tool,
+    update_project,
+    update_task_tool,
 )
 
 SYSTEM_PROMPT = """You are Minion, a personal assistant bot running on Telegram.
@@ -190,7 +192,8 @@ Three types - auto-infer, never ask:
 - Groceries 🛒: "buy eggs" → Groceries (supermarket/house items, default for ambiguous)
 - Wishlist ✨: "that PS5 I want" → Wishlist (personal wants, "wish", "want", "someday")
 Just add items. Don't ask "which list?" - infer it.
-Gift items with recipients auto-link to contacts if they exist. Use show_gifts_for_contact to see all gift ideas for someone.
+Gift items with recipients auto-link to contacts if they exist.
+Use show_gifts_for_contact to see all gift ideas for someone.
 
 Quantities: Add "12 eggs" and it creates with target=12. Use purchase_item to track partial purchases
 (e.g., "bought 3 eggs" → purchase_item(id, 3)). Items auto-complete when purchased >= target.
@@ -247,32 +250,32 @@ def get_memory_manager() -> MemoryManager:
         db=get_db(),
         additional_instructions="""
         Focus on remembering:
-        
+
         PEOPLE:
         - Names and relationships (e.g., "Jana is friend", "Carlos is accountant")
         - Context about people mentioned (work colleague, family, service provider)
         - How the user prefers to interact with them
-        
+
         PROJECTS & GOALS:
         - Active projects the user is working on
         - Project goals and desired outcomes
         - Project deadlines and milestones
-        
+
         PREFERENCES & HABITS:
         - Work hours and productivity patterns
         - Preferred task organization style
         - Communication preferences
         - Recurring schedules (gym days, meeting patterns)
-        
+
         CONTEXT FROM CONVERSATIONS:
         - Ongoing situations (job search, health goals, events planning)
         - Decisions made and their reasoning
         - Things the user said they would do later
-        
+
         IMPORTANT DATES:
         - Birthdays, anniversaries, deadlines
         - Recurring appointments
-        
+
         Do NOT store:
         - Passwords, API keys, or sensitive credentials
         - Financial account details
@@ -392,7 +395,7 @@ SESSION_ID = f"user_{settings.telegram_user_id}"
 async def chat(message: str) -> str:
     """Send a message to the agent and get a response."""
     logger.info(f"Chat input: {message[:100]}{'...' if len(message) > 100 else ''}")
-    
+
     try:
         agent = get_agent()
         response = await asyncio.to_thread(
@@ -401,10 +404,10 @@ async def chat(message: str) -> str:
             user_id=str(settings.telegram_user_id),
             session_id=SESSION_ID,
         )
-        
+
         content = response.content or ""
         logger.info(f"Chat output: {content[:100]}{'...' if len(content) > 100 else ''}")
-        
+
         return content
     except Exception as e:
         logger.exception(f"Agent error: {e}")

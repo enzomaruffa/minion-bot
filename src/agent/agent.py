@@ -264,39 +264,58 @@ Always confirm actions taken.
 Current timezone: America/Sao_Paulo
 """
 
-FORMAT_HINTS = {
-    "telegram": """
-TELEGRAM FORMATTING (HTML mode):
-Use these HTML tags for formatting:
-- <b>bold</b> — headers, emphasis
-- <i>italic</i> — secondary info, notes
-- <s>strikethrough</s> — completed/cancelled items
-- <code>code</code> — IDs like #12, technical values
-- • for bullet points (unicode, not -)
+SYSTEM_PROMPT = SYSTEM_PROMPT_BASE
 
-DO NOT use: Markdown syntax (*bold*, _italic_, `code`)
-Use \\n for line breaks, not <br>
-Keep messages under 4096 chars.
+# ── Formatter prompts (separate LLM pass for channel-specific formatting) ──
 
-Example format:
-<b>Tasks Due Today</b>
-• <code>#12</code> Buy groceries <i>(Personal)</i>
-• <code>#15</code> Call dentist
-""",
-    "web": """
-MARKDOWN FORMATTING:
-Use standard Markdown for formatting:
-- **bold** for headers and emphasis
-- *italic* for secondary info
-- `code` for IDs like #12
-- - for bullet points
-- ~~strikethrough~~ for completed items
+TELEGRAM_FORMATTER_PROMPT = """\
+You are a formatting agent. Convert the message below to Telegram HTML format.
+Output ONLY the reformatted message — no preamble, no explanation.
 
-DO NOT use HTML tags.
-""",
+HTML TAGS (the only allowed markup):
+• <b>bold</b> — section headers, emphasis
+• <i>italic</i> — secondary info, notes, timestamps
+• <code>#12</code> — task/item IDs, technical values
+• <s>strikethrough</s> — completed/cancelled items
+• Use literal newlines for line breaks (never <br>)
+• Use • for bullet points (never -)
+• Keep under 4096 characters
+
+EMOJI STYLE GUIDE (always apply):
+Action confirmations: ✅ Done/Completed, 🆕 Added/Created, ✏️ Updated/Renamed, \
+🗑️ Deleted/Removed, ⏰ Reminder set
+Task status markers in lists: [ ] todo, [~] in progress, [✓] done
+Category icons (always show next to tasks):
+  💼 Work  🏠 Personal  🏃 Health  💰 Finance  👥 Social  📚 Learning
+Section headers: 🎂 Birthdays, 📅 Calendar, 🛒 Shopping, 📋 Tasks
+Recurring tasks: 🔄
+Weather: use the emoji that matches conditions (☀️ ⛅ 🌧️ etc.)
+
+CRITICAL — NEVER output any Markdown syntax:
+No **bold**, no *italic*, no `backticks`, no ~~strike~~, no - bullets, no # headers.
+
+Preserve the message's content and meaning exactly. Only change formatting.\
+"""
+
+WEB_FORMATTER_PROMPT = """\
+You are a formatting agent. Convert the message below to clean Markdown.
+Output ONLY the reformatted message — no preamble, no explanation.
+
+RULES:
+• **bold** for headers and emphasis
+• *italic* for secondary info
+• `code` for IDs like #12
+• - for bullet points
+• ~~strikethrough~~ for completed items
+
+NEVER output HTML tags.
+Preserve the message's content and meaning exactly. Only change formatting.\
+"""
+
+FORMATTER_PROMPTS = {
+    "telegram": TELEGRAM_FORMATTER_PROMPT,
+    "web": WEB_FORMATTER_PROMPT,
 }
-
-SYSTEM_PROMPT = SYSTEM_PROMPT_BASE + FORMAT_HINTS["telegram"]
 
 # Session database for agent memory
 _db: SqliteDb | None = None
@@ -480,6 +499,33 @@ def get_agent() -> Agent:
 SESSION_ID = f"user_{settings.telegram_user_id}"
 
 
+async def _format_output(text: str, format_hint: str) -> str:
+    """Format agent output for the target channel using a lightweight LLM."""
+    prompt = FORMATTER_PROMPTS.get(format_hint)
+    if not prompt or not text.strip():
+        return text
+
+    try:
+        from openai import AsyncOpenAI
+
+        client = AsyncOpenAI(api_key=settings.openai_api_key)
+        resp = await client.chat.completions.create(
+            model=settings.memory_model,
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": text},
+            ],
+            temperature=0,
+            max_tokens=4096,
+        )
+        formatted = resp.choices[0].message.content or text
+        logger.debug(f"Formatter ({format_hint}): {len(text)}→{len(formatted)} chars")
+        return formatted
+    except Exception:
+        logger.exception("Formatter failed, returning raw output")
+        return text
+
+
 async def chat(message: str, format_hint: str = "telegram") -> str:
     """Send a message to the agent and get a response.
 
@@ -492,23 +538,20 @@ async def chat(message: str, format_hint: str = "telegram") -> str:
     try:
         agent = get_agent()
 
-        # Prepend format instruction for non-default formats
-        if format_hint != "telegram" and format_hint in FORMAT_HINTS:
-            fmt_msg = f"[FORMAT: {FORMAT_HINTS[format_hint].strip()}]\n\n{message}"
-        else:
-            fmt_msg = message
-
         response = await asyncio.to_thread(
             agent.run,
-            fmt_msg,
+            message,
             user_id=str(settings.telegram_user_id),
             session_id=SESSION_ID,
         )
 
         content = response.content or ""
-        logger.info(f"Chat output: {content[:100]}{'...' if len(content) > 100 else ''}")
+        logger.info(f"Chat output (raw): {content[:100]}{'...' if len(content) > 100 else ''}")
 
-        return content
+        formatted = await _format_output(content, format_hint)
+        logger.info(f"Chat output (fmt): {formatted[:100]}{'...' if len(formatted) > 100 else ''}")
+
+        return formatted
     except Exception as e:
         logger.exception(f"Agent error: {e}")
         raise

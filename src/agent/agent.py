@@ -516,7 +516,7 @@ async def _format_output(text: str, format_hint: str) -> str:
                 {"role": "user", "content": text},
             ],
             temperature=0,
-            max_tokens=4096,
+            max_completion_tokens=4096,
         )
         formatted = resp.choices[0].message.content or text
         logger.debug(f"Formatter ({format_hint}): {len(text)}→{len(formatted)} chars")

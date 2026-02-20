@@ -90,6 +90,11 @@ def add_tasks(tasks: list[dict]) -> str:
 
             created_ids.append(task.id)
 
+            if task.due_date:
+                from src.services.reminders import ensure_deadline_reminder
+
+                ensure_deadline_reminder(session, task)
+
     if len(created_ids) == 1:
         recur = " 🔄" if recurrence_flags[0] else ""
         return f"Created task <code>#{created_ids[0]}</code>{recur}"
@@ -154,6 +159,11 @@ def update_task_tool(
 
         if not task:
             return f"Task <code>#{task_id}</code> not found"
+
+        if due_date is not None and task.due_date:
+            from src.services.reminders import ensure_deadline_reminder
+
+            ensure_deadline_reminder(session, task)
 
         return f"Updated <code>#{task_id}</code> <i>{task.title}</i>"
 

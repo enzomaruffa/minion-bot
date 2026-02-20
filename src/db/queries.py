@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql import Select
 
@@ -460,8 +460,9 @@ def create_reminder(
     message: str,
     remind_at: datetime,
     task_id: int | None = None,
+    auto_created: bool = False,
 ) -> Reminder:
-    reminder = Reminder(message=message, remind_at=remind_at, task_id=task_id)
+    reminder = Reminder(message=message, remind_at=remind_at, task_id=task_id, auto_created=auto_created)
     session.add(reminder)
     session.flush()
     session.refresh(reminder)
@@ -499,6 +500,51 @@ def delete_reminder(session: Session, reminder_id: int) -> bool:
     session.delete(reminder)
     session.flush()
     return True
+
+
+def get_task_reminders(session: Session, task_id: int, auto_only: bool = False) -> Sequence[Reminder]:
+    """Get reminders linked to a specific task."""
+    stmt = select(Reminder).where(Reminder.task_id == task_id).order_by(Reminder.remind_at)
+    if auto_only:
+        stmt = stmt.where(Reminder.auto_created == True)
+    return session.scalars(stmt).all()
+
+
+def delete_auto_reminders_for_task(session: Session, task_id: int) -> int:
+    """Delete all auto-created, undelivered reminders for a task. Returns count deleted."""
+    stmt = (
+        delete(Reminder)
+        .where(Reminder.task_id == task_id)
+        .where(Reminder.auto_created == True)
+        .where(Reminder.delivered == False)
+    )
+    result = session.execute(stmt)
+    session.flush()
+    return result.rowcount
+
+
+def list_tasks_due_soon_without_reminders(session: Session, now: datetime, within_hours: int = 24) -> Sequence[Task]:
+    """Get active tasks due within N hours that have no pending manual reminders.
+
+    Excludes auto-created reminders so the nudge still fires when only
+    the default auto-reminder exists.
+    """
+    deadline = now + timedelta(hours=within_hours)
+    stmt = (
+        _task_query()
+        .where(Task.due_date >= now)
+        .where(Task.due_date <= deadline)
+        .where(Task.status.in_([TaskStatus.TODO, TaskStatus.IN_PROGRESS]))
+        .where(
+            ~select(Reminder.id)
+            .where(Reminder.task_id == Task.id)
+            .where(Reminder.delivered == False)
+            .where(Reminder.auto_created == False)
+            .exists()
+        )
+        .order_by(Task.due_date)
+    )
+    return session.scalars(stmt).all()
 
 
 # CalendarEvent

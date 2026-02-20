@@ -2,6 +2,7 @@ from src.db import session_scope
 from src.db.queries import (
     create_reminder,
     delete_reminder,
+    get_task,
     list_all_reminders,
 )
 from src.utils import parse_date
@@ -76,3 +77,39 @@ def cancel_reminder(reminder_id: int) -> str:
         if success:
             return f"Cancelled reminder #{reminder_id}"
         return f"Reminder #{reminder_id} not found"
+
+
+def remind_before_deadline(task_id: int, hours_before: float = 1.0) -> str:
+    """Set a reminder relative to a task's deadline.
+
+    Creates a reminder that fires a specified number of hours before the task's due date.
+    If an auto-reminder already exists for this task, it will be replaced.
+
+    Args:
+        task_id: The task ID to set a deadline reminder for.
+        hours_before: How many hours before the deadline to be reminded (default: 1 hour).
+
+    Returns:
+        Confirmation message or error.
+    """
+    from src.services.reminders import ensure_deadline_reminder
+
+    with session_scope() as session:
+        task = get_task(session, task_id)
+        if not task:
+            return f"Task <code>#{task_id}</code> not found"
+
+        if not task.due_date:
+            return f"Task <code>#{task_id}</code> has no due date set"
+
+        reminder = ensure_deadline_reminder(session, task, offset_hours=hours_before)
+
+        if not reminder:
+            return "Cannot set reminder — the computed time is already in the past"
+
+        time_str = reminder.remind_at.strftime("%b %d, %H:%M")
+        return (
+            f"Reminder <code>#{reminder.id}</code> set for {time_str} "
+            f"({hours_before}h before deadline of task <code>#{task_id}</code> "
+            f"<i>{task.title}</i>)"
+        )

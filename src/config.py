@@ -30,6 +30,8 @@ class Settings:
     agent_model: str
     memory_model: str
     vision_model: str
+    # Reminder defaults
+    default_reminder_offset_hours: float
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -67,6 +69,8 @@ class Settings:
         memory_model = os.environ.get("MEMORY_MODEL", "gpt-5-mini")
         vision_model = os.environ.get("VISION_MODEL", "gpt-5.2")
 
+        default_reminder_offset_hours = float(os.environ.get("DEFAULT_REMINDER_OFFSET_HOURS", "1.0"))
+
         return cls(
             telegram_bot_token=telegram_bot_token,
             telegram_user_id=int(telegram_user_id),
@@ -84,6 +88,7 @@ class Settings:
             agent_model=agent_model,
             memory_model=memory_model,
             vision_model=vision_model,
+            default_reminder_offset_hours=default_reminder_offset_hours,
         )
 
 

@@ -60,6 +60,7 @@ from .projects import (  # noqa: E402
 from .reminders import (  # noqa: E402
     cancel_reminder,
     list_reminders,
+    remind_before_deadline,
     set_reminder,
 )
 from .scheduling import find_free_slot  # noqa: E402
@@ -115,6 +116,7 @@ __all__ = [
     "set_reminder",
     "list_reminders",
     "cancel_reminder",
+    "remind_before_deadline",
     "get_agenda",
     "test_calendar",
     "create_calendar_event",

@@ -129,6 +129,7 @@ class Reminder(Base):
     message: Mapped[str] = mapped_column(Text)
     remind_at: Mapped[datetime] = mapped_column(index=True)
     delivered: Mapped[bool] = mapped_column(default=False, index=True)
+    auto_created: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
 
     task: Mapped[Optional["Task"]] = relationship(back_populates="reminders")

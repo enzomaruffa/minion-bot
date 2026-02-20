@@ -94,6 +94,7 @@ from src.agent.tools import (  # noqa: E402 — must follow tool_logger_hook def
     move_task,
     purchase_item,
     read_note_tool,
+    remind_before_deadline,
     remove_bookmark,
     remove_contact,
     remove_item,
@@ -411,6 +412,7 @@ def create_agent() -> Agent:
             set_reminder,
             list_reminders,
             cancel_reminder,
+            remind_before_deadline,
             # Agenda tool
             get_agenda,
             # Calendar tools

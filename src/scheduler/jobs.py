@@ -15,11 +15,13 @@ from src.db.queries import (
     list_pending_reminders,
     list_tasks_by_status,
     list_tasks_due_soon,
+    list_tasks_due_soon_without_reminders,
     list_upcoming_birthdays,
     mark_reminder_delivered,
     update_task,
 )
 from src.notifications import notify
+from src.services.reminders import propagate_reminders_to_new_instance
 from src.utils import days_until_birthday, format_birthday_proximity
 
 logger = logging.getLogger(__name__)
@@ -192,6 +194,18 @@ async def proactive_intelligence() -> None:
                         lines.append(f"  {contact.name} - {format_birthday_proximity(d)}")
                 messages.append("\n".join(lines))
 
+            # 7. Reminder gap detection: tasks due within 24h with no reminders
+            tasks_no_rem = list_tasks_due_soon_without_reminders(session, now, within_hours=24)
+            if tasks_no_rem:
+                lines = ["Tasks due soon with no reminders:"]
+                for t in tasks_no_rem[:5]:
+                    hours_left = (t.due_date - now).total_seconds() / 3600
+                    lines.append(f"  #{t.id}: {t.title} (due in {hours_left:.0f}h)")
+                if len(tasks_no_rem) > 5:
+                    lines.append(f"  ... and {len(tasks_no_rem) - 5} more")
+                lines.append('Say "remind me about task #ID" to set reminders.')
+                messages.append("\n".join(lines))
+
         # Send combined message if there are any nudges
         if messages:
             combined = "Proactive Check-in\n\n" + "\n\n".join(messages)
@@ -244,9 +258,12 @@ async def generate_recurring_tasks() -> None:
                 next_due = _get_next_occurrence(task.recurrence_rule, after)
 
                 if next_due:
-                    create_next_recurring_instance(session, task, next_due)
+                    new_task = create_next_recurring_instance(session, task, next_due)
+                    propagated = propagate_reminders_to_new_instance(session, task, new_task)
                     generated += 1
                     logger.info(f"Generated next instance for task #{task.id}: due {next_due}")
+                    if propagated:
+                        logger.info(f"Propagated {len(propagated)} reminders to task #{new_task.id}")
                 else:
                     logger.warning(f"Could not compute next occurrence for task #{task.id}")
 

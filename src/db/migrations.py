@@ -322,3 +322,19 @@ MIGRATIONS.append(
         _010_add_web_sessions,
     )
 )
+
+
+def _011_add_reminder_auto_created(session: Session) -> None:
+    """Add auto_created column to reminders table."""
+    if not _column_exists(session, "reminders", "auto_created"):
+        session.execute(text("ALTER TABLE reminders ADD COLUMN auto_created BOOLEAN DEFAULT 0"))
+    session.flush()
+
+
+MIGRATIONS.append(
+    (
+        "011_add_reminder_auto_created",
+        "Add auto_created flag to reminders for deadline auto-remind",
+        _011_add_reminder_auto_created,
+    )
+)

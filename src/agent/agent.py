@@ -7,7 +7,15 @@ from typing import Any
 
 from agno.agent import Agent
 from agno.db.sqlite import SqliteDb
-from agno.memory import MemoryManager
+from agno.learn import (
+    DecisionLogConfig,
+    EntityMemoryConfig,
+    LearningMachine,
+    LearningMode,
+    SessionContextConfig,
+    UserMemoryConfig,
+    UserProfileConfig,
+)
 from agno.models.openai import OpenAIChat
 
 from src.config import settings
@@ -48,6 +56,8 @@ def tool_logger_hook(function_name: str, function_call: Callable, arguments: dic
 from src.agent.tools import (  # noqa: E402 — must follow tool_logger_hook definition
     # Contact tools
     add_contact,
+    # Interest tools
+    add_interest,
     add_subtask,
     add_tasks,
     # Shopping tools
@@ -56,6 +66,10 @@ from src.agent.tools import (  # noqa: E402 — must follow tool_logger_hook def
     archive_project,
     assign_tasks_to_project,
     assign_to_project,
+    # Beads fallback tools
+    beads_create,
+    beads_list,
+    beads_ready,
     # Notes tools
     browse_notes,
     cancel_reminder,
@@ -68,6 +82,8 @@ from src.agent.tools import (  # noqa: E402 — must follow tool_logger_hook def
     create_project,
     delete_calendar_event,
     delete_task_tool,
+    # Web tools
+    fetch_url,
     # Scheduling tools
     find_free_slot,
     get_agenda,
@@ -78,6 +94,7 @@ from src.agent.tools import (  # noqa: E402 — must follow tool_logger_hook def
     # Profile tools
     get_weather,
     list_calendar_events,
+    list_interests,
     list_projects_tool,
     # Bookmark tools
     list_reading_list,
@@ -97,7 +114,11 @@ from src.agent.tools import (  # noqa: E402 — must follow tool_logger_hook def
     remind_before_deadline,
     remove_bookmark,
     remove_contact,
+    remove_interest,
     remove_item,
+    # Code execution tools
+    run_python_code,
+    run_shell_command,
     save_bookmark,
     search_notes_tool,
     search_reading_list,
@@ -117,10 +138,12 @@ from src.agent.tools import (  # noqa: E402 — must follow tool_logger_hook def
     upcoming_birthdays,
     update_calendar_event,
     update_contact_tool,
+    update_interest_tool,
     update_note_tool,
     update_profile,
     update_project,
     update_task_tool,
+    web_search,
 )
 
 SYSTEM_PROMPT_BASE = """You are Minion, a personal assistant bot.
@@ -139,6 +162,10 @@ Your capabilities:
 - Shopping lists: manage gifts, groceries, and wishlist items
 - Contacts: track people and their birthdays
 - Notes: browse, read, create, update, and search Silverbullet notes
+- Code execution: run Python code and shell commands directly
+- Web browsing: search the web, fetch URLs, browse pages with a full browser
+- Interest tracking: monitor topics proactively (news, prices, updates)
+- Beads: track work items and sub-agent tasks
 
 BEHAVIOR:
 Be proactive! For reversible actions (adding tasks, items, contacts), just do it - don't ask permission.
@@ -258,6 +285,41 @@ When user shares how they feel or rates their day, use log_mood (1-5 scale).
 1: terrible, 2: bad, 3: okay, 4: good, 5: great.
 Use mood_summary to check trends when relevant.
 
+CODE EXECUTION:
+You can run Python code and shell commands directly on the host.
+- run_python_code: execute Python scripts, install packages if needed
+- run_shell_command: execute shell commands
+Use these for calculations, data processing, file operations, or any computational task.
+
+WEB BROWSING:
+You can search the web and fetch content from URLs.
+- web_search: search via DuckDuckGo for current information
+- fetch_url: extract readable text from any URL
+- Browser tools (via Playwright MCP): navigate, click, fill forms, take screenshots
+Use these for research, price comparisons, news, or any web-based task.
+
+INTERESTS:
+Track topics the user cares about for proactive monitoring.
+- add_interest: start tracking a topic (e.g., "Rust news", "PS5 prices")
+- list_interests: show all tracked interests
+- remove_interest / update_interest_tool: manage interests
+The heartbeat system will proactively research these and notify the user.
+
+BEADS (Work Tracking):
+Track sub-tasks and delegated work via Beads.
+- beads_create: create a tracked work item
+- beads_list: list tracked items
+- beads_ready: show items ready to work on
+
+CONSTANT LEARNING:
+You are ALWAYS learning. After EVERY interaction, think:
+- User corrected you or expressed a preference? → save it via memory tools immediately
+- You learned a fact about a person/service/website? → entity memory captures it
+- User made a decision with reasoning? → decision log captures it
+- You discovered a workflow pattern? → save it as learned knowledge
+When the user says "I don't like X", "actually do it this way", "I prefer Y" — IMMEDIATELY save it.
+Before making decisions, your stored memories and knowledge are already in context — act on them.
+
 When the user mentions something that sounds like a task, offer to add it.
 When they mention a time or deadline, offer to set a reminder.
 Always confirm actions taken.
@@ -318,7 +380,7 @@ FORMATTER_PROMPTS = {
     "web": WEB_FORMATTER_PROMPT,
 }
 
-# Session database for agent memory
+# Session database for agent memory and learning
 _db: SqliteDb | None = None
 
 
@@ -332,149 +394,156 @@ def get_db() -> SqliteDb:
     return _db
 
 
-def get_memory_manager() -> MemoryManager:
-    """Create a memory manager with custom instructions."""
-    return MemoryManager(
-        model=OpenAIChat(id=settings.memory_model, api_key=settings.openai_api_key),
-        db=get_db(),
-        additional_instructions="""
-        Focus on remembering:
+def _get_learning_machine() -> LearningMachine:
+    """Create the LearningMachine with 6 specialized stores."""
+    db = get_db()
+    model = OpenAIChat(id=settings.memory_model, api_key=settings.openai_api_key)
 
-        PEOPLE:
-        - Names and relationships (e.g., "Jana is friend", "Carlos is accountant")
-        - Context about people mentioned (work colleague, family, service provider)
-        - How the user prefers to interact with them
-
-        PROJECTS & GOALS:
-        - Active projects the user is working on
-        - Project goals and desired outcomes
-        - Project deadlines and milestones
-
-        PREFERENCES & HABITS:
-        - Work hours and productivity patterns
-        - Preferred task organization style
-        - Communication preferences
-        - Recurring schedules (gym days, meeting patterns)
-
-        CONTEXT FROM CONVERSATIONS:
-        - Ongoing situations (job search, health goals, events planning)
-        - Decisions made and their reasoning
-        - Things the user said they would do later
-
-        IMPORTANT DATES:
-        - Birthdays, anniversaries, deadlines
-        - Recurring appointments
-
-        Do NOT store:
-        - Passwords, API keys, or sensitive credentials
-        - Financial account details
-        - Temporary information with no lasting value
-        """,
+    return LearningMachine(
+        db=db,
+        model=model,
+        # Structured profile: name, preferences — auto-extracted always
+        user_profile=UserProfileConfig(mode=LearningMode.ALWAYS),
+        # Unstructured observations — agent decides what to save
+        user_memory=UserMemoryConfig(mode=LearningMode.AGENTIC),
+        # Session goals, plan, progress — auto-tracked
+        session_context=SessionContextConfig(mode=LearningMode.ALWAYS),
+        # Facts about external entities (people, companies, services) — auto
+        entity_memory=EntityMemoryConfig(mode=LearningMode.ALWAYS),
+        # Decisions with reasoning — auto
+        decision_log=DecisionLogConfig(mode=LearningMode.ALWAYS),
+        namespace="user",
     )
 
 
-def create_agent() -> Agent:
-    """Create and configure the Minion agent."""
+# All custom tools (non-MCP)
+_CUSTOM_TOOLS = [
+    # Utility tools
+    get_current_datetime,
+    # Task management tools
+    add_tasks,
+    update_task_tool,
+    complete_task,
+    get_overdue_tasks,
+    list_tasks,
+    search_tasks_tool,
+    get_task_details,
+    delete_task_tool,
+    # Task hierarchy tools
+    add_subtask,
+    move_task,
+    # Tag tools
+    list_tags,
+    # Project tools
+    create_project,
+    list_projects_tool,
+    show_project,
+    assign_to_project,
+    unassign_from_project,
+    archive_project,
+    assign_tasks_to_project,
+    move_project_tasks,
+    update_project,
+    # Reminder tools
+    set_reminder,
+    list_reminders,
+    cancel_reminder,
+    remind_before_deadline,
+    # Agenda tool
+    get_agenda,
+    # Calendar tools
+    test_calendar,
+    create_calendar_event,
+    update_calendar_event,
+    delete_calendar_event,
+    list_calendar_events,
+    # Shopping list tools
+    add_to_list,
+    show_list,
+    check_item,
+    uncheck_item,
+    remove_item,
+    clear_checked,
+    show_gifts_for_contact,
+    purchase_item,
+    # Contact tools
+    add_contact,
+    show_contacts,
+    upcoming_birthdays,
+    update_contact_tool,
+    remove_contact,
+    get_contact_tasks,
+    # Notes tools
+    browse_notes,
+    read_note_tool,
+    create_note_tool,
+    update_note_tool,
+    append_to_note_tool,
+    search_notes_tool,
+    # Profile tools
+    update_profile,
+    show_profile,
+    get_weather,
+    # Bookmark tools
+    save_bookmark,
+    list_reading_list,
+    mark_read,
+    remove_bookmark,
+    search_reading_list,
+    # Mood tools
+    log_mood,
+    show_mood_history,
+    mood_summary,
+    # Scheduling tools
+    find_free_slot,
+    # Recurring task tools
+    list_recurring,
+    stop_recurring,
+    # Code execution tools
+    run_python_code,
+    run_shell_command,
+    # Web tools
+    web_search,
+    fetch_url,
+    # Interest tools
+    add_interest,
+    list_interests,
+    remove_interest,
+    update_interest_tool,
+    # Beads fallback tools
+    beads_create,
+    beads_list,
+    beads_ready,
+]
+
+
+def create_agent(mcp_tools: list | None = None) -> Agent:
+    """Create and configure the Minion agent.
+
+    Args:
+        mcp_tools: Optional list of MCPTools instances (Playwright, Beads, etc.)
+    """
     logger.info("Creating Minion agent...")
+
+    tools: list = list(_CUSTOM_TOOLS)
+    if mcp_tools:
+        tools.extend(mcp_tools)
+
     return Agent(
         model=OpenAIChat(
             id=settings.agent_model,
             api_key=settings.openai_api_key,
         ),
-        tools=[
-            # Utility tools
-            get_current_datetime,
-            # Task management tools
-            add_tasks,
-            update_task_tool,
-            complete_task,
-            get_overdue_tasks,
-            list_tasks,
-            search_tasks_tool,
-            get_task_details,
-            delete_task_tool,
-            # Task hierarchy tools
-            add_subtask,
-            move_task,
-            # Tag tools
-            list_tags,
-            # Project tools
-            create_project,
-            list_projects_tool,
-            show_project,
-            assign_to_project,
-            unassign_from_project,
-            archive_project,
-            assign_tasks_to_project,
-            move_project_tasks,
-            update_project,
-            # Reminder tools
-            set_reminder,
-            list_reminders,
-            cancel_reminder,
-            remind_before_deadline,
-            # Agenda tool
-            get_agenda,
-            # Calendar tools
-            test_calendar,
-            create_calendar_event,
-            update_calendar_event,
-            delete_calendar_event,
-            list_calendar_events,
-            # Shopping list tools
-            add_to_list,
-            show_list,
-            check_item,
-            uncheck_item,
-            remove_item,
-            clear_checked,
-            show_gifts_for_contact,
-            purchase_item,
-            # Contact tools
-            add_contact,
-            show_contacts,
-            upcoming_birthdays,
-            update_contact_tool,
-            remove_contact,
-            get_contact_tasks,
-            # Notes tools
-            browse_notes,
-            read_note_tool,
-            create_note_tool,
-            update_note_tool,
-            append_to_note_tool,
-            search_notes_tool,
-            # Profile tools
-            update_profile,
-            show_profile,
-            get_weather,
-            # Bookmark tools
-            save_bookmark,
-            list_reading_list,
-            mark_read,
-            remove_bookmark,
-            search_reading_list,
-            # Mood tools
-            log_mood,
-            show_mood_history,
-            mood_summary,
-            # Scheduling tools
-            find_free_slot,
-            # Recurring task tools
-            list_recurring,
-            stop_recurring,
-        ],
+        tools=tools,
         instructions=SYSTEM_PROMPT,
         markdown=True,
         # Tool hooks for logging
         tool_hooks=[tool_logger_hook],
         # Database for persistence
         db=get_db(),
-        # Memory configuration
-        memory_manager=get_memory_manager(),
-        enable_user_memories=True,
-        enable_agentic_memory=True,
-        add_memories_to_context=True,
+        # LearningMachine (replaces old MemoryManager)
+        learning=_get_learning_machine(),
+        add_learnings_to_context=True,
         # Session history
         add_history_to_context=True,
         num_history_runs=10,
@@ -495,6 +564,12 @@ def get_agent() -> Agent:
     if _agent is None:
         _agent = create_agent()
     return _agent
+
+
+def reset_agent() -> None:
+    """Reset the agent singleton (e.g., after MCP init)."""
+    global _agent
+    _agent = None
 
 
 # Fixed session ID for single-user bot

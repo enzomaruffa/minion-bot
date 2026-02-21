@@ -14,6 +14,9 @@ def get_current_datetime() -> str:
 
 
 from .agenda import get_agenda  # noqa: E402
+
+# Phase 4: Autonomous Proactive Agent tools
+from .beads import beads_create, beads_list, beads_ready  # noqa: E402
 from .bookmarks import (  # noqa: E402
     list_reading_list,
     mark_read,
@@ -28,6 +31,7 @@ from .calendar import (  # noqa: E402
     test_calendar,
     update_calendar_event,
 )
+from .code import run_python_code, run_shell_command  # noqa: E402
 from .contacts import (  # noqa: E402
     add_contact,
     get_contact_tasks,
@@ -35,6 +39,19 @@ from .contacts import (  # noqa: E402
     show_contacts,
     upcoming_birthdays,
     update_contact_tool,
+)
+from .heartbeat_tools import (  # noqa: E402
+    check_dedup,
+    delegate_research,
+    delegate_task_work,
+    log_heartbeat_action,
+    send_proactive_notification,
+)
+from .interests import (  # noqa: E402
+    add_interest,
+    list_interests,
+    remove_interest,
+    update_interest_tool,
 )
 from .mood import log_mood, mood_summary, show_mood_history  # noqa: E402
 from .notes import (  # noqa: E402
@@ -89,6 +106,7 @@ from .tasks import (  # noqa: E402
     stop_recurring,
     update_task_tool,
 )
+from .web import fetch_url, web_search  # noqa: E402
 
 __all__ = [
     "get_current_datetime",
@@ -165,4 +183,25 @@ __all__ = [
     # Recurring task tools
     "list_recurring",
     "stop_recurring",
+    # Code execution tools
+    "run_python_code",
+    "run_shell_command",
+    # Web tools
+    "web_search",
+    "fetch_url",
+    # Interest tools
+    "add_interest",
+    "list_interests",
+    "remove_interest",
+    "update_interest_tool",
+    # Beads fallback tools
+    "beads_create",
+    "beads_list",
+    "beads_ready",
+    # Heartbeat-internal tools
+    "check_dedup",
+    "log_heartbeat_action",
+    "send_proactive_notification",
+    "delegate_research",
+    "delegate_task_work",
 ]

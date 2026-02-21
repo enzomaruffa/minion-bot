@@ -10,6 +10,7 @@ from .models import (
     Bookmark,
     CalendarEvent,
     Contact,
+    HeartbeatLog,
     ItemPriority,
     MoodLog,
     Project,
@@ -21,6 +22,7 @@ from .models import (
     TaskPriority,
     TaskStatus,
     UserCalendarToken,
+    UserInterest,
     UserProfile,
     UserProject,
     WebSession,
@@ -1237,3 +1239,125 @@ def cleanup_expired_sessions(session: Session) -> int:
     result = session.execute(stmt)
     session.flush()
     return result.rowcount
+
+
+# ============================================================================
+# User Interest Queries
+# ============================================================================
+
+
+def create_interest(
+    session: Session,
+    topic: str,
+    description: str | None = None,
+    priority: int = 1,
+    check_interval_hours: int = 24,
+) -> UserInterest:
+    """Create a new user interest."""
+    interest = UserInterest(
+        topic=topic,
+        description=description,
+        priority=priority,
+        check_interval_hours=check_interval_hours,
+    )
+    session.add(interest)
+    session.flush()
+    return interest
+
+
+def get_interest(session: Session, interest_id: int) -> UserInterest | None:
+    """Get an interest by ID."""
+    return session.get(UserInterest, interest_id)
+
+
+def list_interests(session: Session, active_only: bool = True) -> Sequence[UserInterest]:
+    """List interests, optionally only active ones."""
+    stmt = select(UserInterest).order_by(UserInterest.priority.desc(), UserInterest.created_at)
+    if active_only:
+        stmt = stmt.where(UserInterest.active == True)
+    return session.scalars(stmt).all()
+
+
+def update_interest(session: Session, interest_id: int, **kwargs) -> UserInterest | None:
+    """Update interest fields."""
+    interest = session.get(UserInterest, interest_id)
+    if not interest:
+        return None
+    for key, value in kwargs.items():
+        if hasattr(interest, key):
+            setattr(interest, key, value)
+    session.flush()
+    return interest
+
+
+def delete_interest(session: Session, interest_id: int) -> bool:
+    """Delete an interest by ID."""
+    interest = session.get(UserInterest, interest_id)
+    if not interest:
+        return False
+    session.delete(interest)
+    session.flush()
+    return True
+
+
+def list_due_interests(session: Session, now: datetime) -> Sequence[UserInterest]:
+    """List active interests that are due for checking."""
+    stmt = select(UserInterest).where(UserInterest.active == True).order_by(UserInterest.priority.desc())
+    results = session.scalars(stmt).all()
+    due = []
+    for interest in results:
+        if interest.last_checked_at is None:
+            due.append(interest)
+        else:
+            next_check = interest.last_checked_at + timedelta(hours=interest.check_interval_hours)
+            if now >= next_check:
+                due.append(interest)
+    return due
+
+
+def mark_interest_checked(session: Session, interest_id: int, now: datetime) -> None:
+    """Update last_checked_at for an interest."""
+    interest = session.get(UserInterest, interest_id)
+    if interest:
+        interest.last_checked_at = now
+        session.flush()
+
+
+# ============================================================================
+# Heartbeat Log Queries
+# ============================================================================
+
+
+def create_heartbeat_log(
+    session: Session,
+    dedup_key: str,
+    action_type: str,
+    summary: str,
+    interest_id: int | None = None,
+    notified: bool = False,
+) -> HeartbeatLog:
+    """Create a heartbeat log entry."""
+    log = HeartbeatLog(
+        dedup_key=dedup_key,
+        action_type=action_type,
+        summary=summary,
+        interest_id=interest_id,
+        notified=notified,
+    )
+    session.add(log)
+    session.flush()
+    return log
+
+
+def check_heartbeat_dedup(session: Session, dedup_key: str, since: datetime) -> bool:
+    """Check if a dedup_key exists in heartbeat_logs since the given time."""
+    stmt = (
+        select(HeartbeatLog).where(HeartbeatLog.dedup_key == dedup_key).where(HeartbeatLog.created_at >= since).limit(1)
+    )
+    return session.scalars(stmt).first() is not None
+
+
+def list_recent_heartbeat_logs(session: Session, limit: int = 20) -> Sequence[HeartbeatLog]:
+    """List recent heartbeat log entries."""
+    stmt = select(HeartbeatLog).order_by(HeartbeatLog.created_at.desc()).limit(limit)
+    return session.scalars(stmt).all()

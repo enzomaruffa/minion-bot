@@ -4,22 +4,26 @@ version = "0.1.0"
 description = "Telegram personal assistant bot"
 requires-python = ">=3.11"
 dependencies = [
-    "agno>=2.4.2",
+    "agno>=2.5.3",
     "aiosqlite>=0.22.1",
     "apscheduler>=3.11.2",
-    "fastapi>=0.115.0",
-    "google-api-python-client>=2.188.0",
+    "fastapi>=0.129.2",
+    "google-api-python-client>=2.190.0",
     "google-auth-oauthlib>=1.2.4",
-    "openai>=2.15.0",
+    "openai>=2.21.0",
     "python-dotenv>=1.2.1",
-    "python-telegram-bot>=22.5",
+    "python-telegram-bot>=22.6",
     "sqlalchemy>=2.0.46",
-    "dateparser>=1.2.0",
-    "uvicorn>=0.34.0",
+    "dateparser>=1.3.0",
+    "uvicorn>=0.41.0",
     "geopy>=2.4.1",
     "jinja2>=3.1.6",
-    "python-multipart>=0.0.21",
+    "python-multipart>=0.0.22",
     "itsdangerous>=2.2.0",
+    "readability-lxml>=0.8.4.1",
+    "httpx>=0.28.1",
+    "mcp>=1.26.0",
+    "ddgs>=9.10.0",
 ]
 
 [build-system]
@@ -34,8 +38,8 @@ dev = [
     "pre-commit>=4.5.1",
     "pytest>=9.0.2",
     "pytest-asyncio>=1.3.0",
-    "ruff>=0.15.0",
-    "ty>=0.0.15",
+    "ruff>=0.15.2",
+    "ty>=0.0.18",
 ]
 
 [tool.ruff]

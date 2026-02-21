@@ -240,6 +240,37 @@ class WebSession(Base):
     expires_at: Mapped[datetime] = mapped_column()
 
 
+class UserInterest(Base):
+    """User interests for proactive heartbeat monitoring."""
+
+    __tablename__ = "user_interests"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    topic: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    priority: Mapped[int] = mapped_column(default=1)  # 1-3, higher = more important
+    active: Mapped[bool] = mapped_column(default=True, index=True)
+    check_interval_hours: Mapped[int] = mapped_column(default=24)
+    last_checked_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
+
+
+class HeartbeatLog(Base):
+    """Log of heartbeat agent actions for audit and dedup."""
+
+    __tablename__ = "heartbeat_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dedup_key: Mapped[str] = mapped_column(String(255), index=True)
+    action_type: Mapped[str] = mapped_column(String(50))  # research, notify, skip, delegate, plan
+    summary: Mapped[str] = mapped_column(Text)
+    interest_id: Mapped[int | None] = mapped_column(ForeignKey("user_interests.id"), nullable=True)
+    notified: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
+
+    interest: Mapped[Optional["UserInterest"]] = relationship()
+
+
 class UserCalendarToken(Base):
     """Stores Google Calendar OAuth tokens per Telegram user."""
 

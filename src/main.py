@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import threading
 
@@ -9,7 +10,6 @@ from src.scheduler.jobs import (
     eod_review,
     generate_recurring_tasks,
     morning_summary,
-    proactive_intelligence,
     sync_calendar,
 )
 
@@ -34,8 +34,11 @@ def register_jobs() -> None:
     # Reminder delivery every minute
     add_interval_job(deliver_reminders, minutes=1, job_id="reminder_delivery")
 
-    # Proactive intelligence at 5 PM daily
-    add_cron_job(proactive_intelligence, hour=17, minute=0, job_id="proactive_intelligence")
+    # Heartbeat engine (replaces old proactive_intelligence)
+    if settings.heartbeat_enabled:
+        from src.scheduler.heartbeat import run_heartbeat
+
+        add_interval_job(run_heartbeat, minutes=settings.heartbeat_interval_minutes, job_id="heartbeat")
 
     # Calendar sync every 30 minutes
     add_interval_job(sync_calendar, minutes=30, job_id="calendar_sync")
@@ -49,12 +52,37 @@ def register_jobs() -> None:
     add_cron_job(cleanup_expired_sessions_job, hour=3, minute=0, job_id="session_cleanup")
 
 
+async def _init_mcp_and_agent() -> None:
+    """Initialize MCP servers and recreate agent with MCP tools."""
+    try:
+        from src.agent.mcp import init_mcp_servers
+
+        mcp_tools = await init_mcp_servers()
+        if mcp_tools:
+            from src.agent.agent import create_agent, reset_agent
+
+            reset_agent()
+            # Agent will be lazily recreated with MCP tools on next get_agent() call
+            # Store MCP tools for the singleton to pick up
+            import src.agent.agent as agent_module
+
+            agent_module._agent = create_agent(mcp_tools=mcp_tools)
+            logger.info(f"Agent recreated with {len(mcp_tools)} MCP server(s)")
+        else:
+            logger.info("No MCP servers connected, using agent without MCP tools")
+    except Exception as e:
+        logger.warning(f"MCP initialization failed (non-fatal): {e}")
+
+
 async def post_init(application) -> None:
     """Called after the application is initialized with event loop running."""
     from src.telegram.bot import register_commands
 
     logger.info("Registering bot commands...")
     await register_commands(application)
+
+    logger.info("Initializing MCP servers...")
+    await _init_mcp_and_agent()
 
     logger.info("Starting scheduler...")
     start_scheduler()
@@ -64,6 +92,14 @@ async def post_shutdown(application) -> None:
     """Called during shutdown."""
     logger.info("Stopping scheduler...")
     shutdown_scheduler()
+
+    logger.info("Closing MCP servers...")
+    try:
+        from src.agent.mcp import close_mcp_servers
+
+        await close_mcp_servers()
+    except Exception as e:
+        logger.warning(f"Error closing MCP servers: {e}")
 
 
 def start_web_server() -> None:
@@ -100,6 +136,10 @@ def main() -> None:
         application.run_polling(allowed_updates=["message"])
     else:
         logger.info("No TELEGRAM_BOT_TOKEN — running in web-only mode")
+
+        # Init MCP servers in web-only mode
+        asyncio.run(_init_mcp_and_agent())
+
         start_scheduler()
         try:
             import time

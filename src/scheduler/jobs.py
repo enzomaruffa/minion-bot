@@ -4,25 +4,17 @@ from datetime import datetime, timedelta
 from src.agent.tools.agenda import get_agenda
 from src.config import settings
 from src.db import session_scope
-from src.db.models import TaskPriority, TaskStatus
+from src.db.models import TaskStatus
 from src.db.queries import (
-    count_tasks_by_due_date,
     create_next_recurring_instance,
     get_mood_log,
-    get_mood_stats,
     list_completed_recurring_tasks,
-    list_overdue_tasks,
     list_pending_reminders,
     list_tasks_by_status,
-    list_tasks_due_soon,
-    list_tasks_due_soon_without_reminders,
-    list_upcoming_birthdays,
     mark_reminder_delivered,
-    update_task,
 )
 from src.notifications import notify
 from src.services.reminders import propagate_reminders_to_new_instance
-from src.utils import days_until_birthday, format_birthday_proximity
 
 logger = logging.getLogger(__name__)
 
@@ -125,97 +117,6 @@ async def deliver_reminders() -> None:
                     logger.exception(f"Error delivering reminder #{reminder.id}: {e}")
     except Exception as e:
         logger.exception(f"Error in reminder delivery job: {e}")
-
-
-async def proactive_intelligence() -> None:
-    """Smart nudges and suggestions sent proactively."""
-    logger.info("Running proactive intelligence job")
-
-    try:
-        with session_scope() as session:
-            now = datetime.now(settings.timezone).replace(tzinfo=None)
-            messages = []
-
-            # 1. Priority escalation: bump priority for tasks due within 24h
-            due_soon = list_tasks_due_soon(session, now, within_hours=24)
-            escalated = []
-            for task in due_soon:
-                if task.priority in [TaskPriority.LOW, TaskPriority.MEDIUM]:
-                    update_task(session, task.id, priority=TaskPriority.HIGH)
-                    escalated.append(task)
-
-            if escalated:
-                task_list = ", ".join([f"#{t.id}" for t in escalated[:5]])
-                if len(escalated) > 5:
-                    task_list += f" and {len(escalated) - 5} more"
-                messages.append(f"Priority escalated for tasks due within 24h: {task_list}")
-
-            # 2. Overdue nudges
-            overdue = list_overdue_tasks(session, now)
-            if overdue:
-                lines = ["You have overdue tasks:"]
-                for task in overdue[:5]:
-                    days_overdue = (now - task.due_date).days
-                    emoji = task.project.emoji if task.project else ""
-                    lines.append(f"  #{task.id}: {emoji} {task.title} ({days_overdue}d overdue)")
-                if len(overdue) > 5:
-                    lines.append(f"  ... and {len(overdue) - 5} more")
-                messages.append("\n".join(lines))
-
-            # 3. Smart scheduling: warn about overloaded days
-            tomorrow = now + timedelta(days=1)
-            tomorrow_count = count_tasks_by_due_date(session, tomorrow)
-            if tomorrow_count >= 5:
-                messages.append(f"You have {tomorrow_count} tasks due tomorrow. Consider rescheduling some if needed.")
-
-            # 4. Breakdown suggestions for complex tasks
-            todo_tasks = list_tasks_by_status(session, TaskStatus.TODO, root_only=True)
-            complex_tasks = [t for t in todo_tasks if len(t.title) > 50 or (t.description and len(t.description) > 200)]
-            if complex_tasks:
-                task = complex_tasks[0]  # Just suggest for one at a time
-                messages.append(
-                    f"Task #{task.id} seems complex. Consider breaking it into subtasks:\n"
-                    f'  "{task.title[:60]}{"..." if len(task.title) > 60 else ""}"'
-                )
-
-            # 5. Mood trend check
-            mood_stats = get_mood_stats(session, days=7)
-            if mood_stats["count"] >= 3 and mood_stats["avg"] <= 2.0:
-                messages.append("Your mood has been low lately. Take care of yourself 💙")
-
-            # 6. Upcoming birthdays (within 7 days)
-            upcoming_contacts = list_upcoming_birthdays(session, within_days=7)
-            if upcoming_contacts:
-                today = datetime.now(settings.timezone).date()
-                lines = ["Upcoming Birthdays"]
-                for contact in upcoming_contacts:
-                    if contact.birthday:
-                        d = days_until_birthday(contact.birthday, today)
-                        lines.append(f"  {contact.name} - {format_birthday_proximity(d)}")
-                messages.append("\n".join(lines))
-
-            # 7. Reminder gap detection: tasks due within 24h with no reminders
-            tasks_no_rem = list_tasks_due_soon_without_reminders(session, now, within_hours=24)
-            if tasks_no_rem:
-                lines = ["Tasks due soon with no reminders:"]
-                for t in tasks_no_rem[:5]:
-                    hours_left = (t.due_date - now).total_seconds() / 3600
-                    lines.append(f"  #{t.id}: {t.title} (due in {hours_left:.0f}h)")
-                if len(tasks_no_rem) > 5:
-                    lines.append(f"  ... and {len(tasks_no_rem) - 5} more")
-                lines.append('Say "remind me about task #ID" to set reminders.')
-                messages.append("\n".join(lines))
-
-        # Send combined message if there are any nudges
-        if messages:
-            combined = "Proactive Check-in\n\n" + "\n\n".join(messages)
-            await notify(combined)
-            logger.info(f"Sent proactive intelligence message with {len(messages)} nudges")
-        else:
-            logger.info("No proactive nudges needed")
-
-    except Exception as e:
-        logger.exception(f"Error in proactive intelligence job: {e}")
 
 
 async def sync_calendar() -> None:

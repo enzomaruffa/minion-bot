@@ -338,3 +338,68 @@ MIGRATIONS.append(
         _011_add_reminder_auto_created,
     )
 )
+
+
+def _012_add_user_interests(session: Session) -> None:
+    """Add user_interests table."""
+    result = session.execute(
+        text("SELECT name FROM sqlite_master WHERE type='table' AND name='user_interests'")
+    ).fetchone()
+    if not result:
+        session.execute(
+            text("""
+            CREATE TABLE user_interests (
+                id INTEGER PRIMARY KEY,
+                topic VARCHAR(200) NOT NULL,
+                description TEXT,
+                priority INTEGER DEFAULT 1,
+                active BOOLEAN DEFAULT 1,
+                check_interval_hours INTEGER DEFAULT 24,
+                last_checked_at DATETIME,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        )
+        session.execute(text("CREATE INDEX IF NOT EXISTS ix_user_interests_active ON user_interests (active)"))
+    session.flush()
+
+
+MIGRATIONS.append(
+    (
+        "012_add_user_interests",
+        "Add user_interests table for proactive heartbeat",
+        _012_add_user_interests,
+    )
+)
+
+
+def _013_add_heartbeat_logs(session: Session) -> None:
+    """Add heartbeat_logs table."""
+    result = session.execute(
+        text("SELECT name FROM sqlite_master WHERE type='table' AND name='heartbeat_logs'")
+    ).fetchone()
+    if not result:
+        session.execute(
+            text("""
+            CREATE TABLE heartbeat_logs (
+                id INTEGER PRIMARY KEY,
+                dedup_key VARCHAR(255) NOT NULL,
+                action_type VARCHAR(50) NOT NULL,
+                summary TEXT NOT NULL,
+                interest_id INTEGER REFERENCES user_interests(id),
+                notified BOOLEAN DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        )
+        session.execute(text("CREATE INDEX IF NOT EXISTS ix_heartbeat_logs_dedup ON heartbeat_logs (dedup_key)"))
+    session.flush()
+
+
+MIGRATIONS.append(
+    (
+        "013_add_heartbeat_logs",
+        "Add heartbeat_logs table for proactive agent audit",
+        _013_add_heartbeat_logs,
+    )
+)

@@ -32,6 +32,15 @@ class Settings:
     vision_model: str
     # Reminder defaults
     default_reminder_offset_hours: float
+    # Code execution
+    code_execution_timeout: int
+    # Heartbeat settings
+    heartbeat_interval_minutes: int
+    heartbeat_model: str
+    heartbeat_enabled: bool
+    heartbeat_max_notifications: int
+    # MCP server commands
+    mcp_server_commands: list[str]
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -71,6 +80,19 @@ class Settings:
 
         default_reminder_offset_hours = float(os.environ.get("DEFAULT_REMINDER_OFFSET_HOURS", "1.0"))
 
+        # Code execution
+        code_execution_timeout = int(os.environ.get("CODE_EXECUTION_TIMEOUT", "60"))
+
+        # Heartbeat settings
+        heartbeat_interval_minutes = int(os.environ.get("HEARTBEAT_INTERVAL_MINUTES", "60"))
+        heartbeat_model = os.environ.get("HEARTBEAT_MODEL", "gpt-5-mini")
+        heartbeat_enabled = os.environ.get("HEARTBEAT_ENABLED", "true").lower() == "true"
+        heartbeat_max_notifications = int(os.environ.get("HEARTBEAT_MAX_NOTIFICATIONS", "3"))
+
+        # MCP server commands (comma-separated)
+        mcp_cmds = os.environ.get("MCP_SERVER_COMMANDS", "")
+        mcp_server_commands = [c.strip() for c in mcp_cmds.split(",") if c.strip()]
+
         return cls(
             telegram_bot_token=telegram_bot_token,
             telegram_user_id=int(telegram_user_id),
@@ -89,6 +111,12 @@ class Settings:
             memory_model=memory_model,
             vision_model=vision_model,
             default_reminder_offset_hours=default_reminder_offset_hours,
+            code_execution_timeout=code_execution_timeout,
+            heartbeat_interval_minutes=heartbeat_interval_minutes,
+            heartbeat_model=heartbeat_model,
+            heartbeat_enabled=heartbeat_enabled,
+            heartbeat_max_notifications=heartbeat_max_notifications,
+            mcp_server_commands=mcp_server_commands,
         )
 
 

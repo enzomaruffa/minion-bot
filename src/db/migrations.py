@@ -403,3 +403,83 @@ MIGRATIONS.append(
         _013_add_heartbeat_logs,
     )
 )
+
+
+def _014_dedup_recurring_tasks(session: Session) -> None:
+    """Clean up duplicate recurring task instances.
+
+    Bug: the old successor check only looked for TODO/IN_PROGRESS successors,
+    so every DONE task in a recurrence chain kept spawning new instances.
+
+    Fix: for each (title, recurrence_rule) group with multiple TODO instances,
+    keep only the one with the latest due_date and delete the rest.  Also strip
+    recurrence_rule from DONE tasks that already have a non-cancelled successor
+    so they can never re-trigger.
+    """
+    from collections import defaultdict
+
+    # 1) Delete duplicate TODO recurring tasks, keep only latest per group
+    rows = session.execute(
+        text("""
+            SELECT id, title, recurrence_rule, due_date
+            FROM tasks
+            WHERE recurrence_rule IS NOT NULL
+              AND status = 'todo'
+            ORDER BY title, due_date DESC
+        """)
+    ).fetchall()
+
+    groups: dict[tuple[str, str], list[int]] = defaultdict(list)
+    for task_id, title, rule, due_date in rows:
+        groups[(title, rule)].append(task_id)
+
+    deleted = 0
+    for key, ids in groups.items():
+        if len(ids) <= 1:
+            continue
+        # ids[0] has the latest due_date (ORDER BY ... DESC), keep it
+        to_delete = ids[1:]
+        placeholders = ",".join(str(i) for i in to_delete)
+        # Delete associated reminders first
+        session.execute(text(f"DELETE FROM reminders WHERE task_id IN ({placeholders})"))
+        session.execute(text(f"DELETE FROM tasks WHERE id IN ({placeholders})"))
+        deleted += len(to_delete)
+
+    # 2) Strip recurrence_rule from DONE tasks that have a non-cancelled successor
+    #    so they can never re-trigger generation
+    done_recurring = session.execute(
+        text("""
+            SELECT id FROM tasks
+            WHERE recurrence_rule IS NOT NULL AND status = 'done'
+        """)
+    ).fetchall()
+
+    stripped = 0
+    for (task_id,) in done_recurring:
+        has_successor = session.execute(
+            text("""
+                SELECT 1 FROM tasks
+                WHERE recurrence_source_id = :tid AND status != 'cancelled'
+                LIMIT 1
+            """),
+            {"tid": task_id},
+        ).fetchone()
+        if has_successor:
+            session.execute(
+                text("UPDATE tasks SET recurrence_rule = NULL WHERE id = :tid"),
+                {"tid": task_id},
+            )
+            stripped += 1
+
+    session.flush()
+    if deleted or stripped:
+        logger.info(f"Recurring cleanup: deleted {deleted} duplicates, stripped rule from {stripped} old DONE tasks")
+
+
+MIGRATIONS.append(
+    (
+        "014_dedup_recurring_tasks",
+        "Delete duplicate recurring task instances and strip rule from old DONE tasks",
+        _014_dedup_recurring_tasks,
+    )
+)

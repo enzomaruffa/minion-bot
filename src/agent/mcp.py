@@ -24,14 +24,14 @@ async def init_mcp_servers() -> list[MCPTools]:
     except Exception as e:
         logger.warning(f"Failed to start Playwright MCP: {e}")
 
-    # Beads MCP (task tracking)
+    # Beads MCP (task tracking) — use uvx to run from PyPI
     try:
-        beads = MCPTools(command="beads-mcp")
+        beads = MCPTools(command="uvx beads-mcp")
         await beads.initialize()
         servers.append(beads)
         logger.info("Beads MCP server connected")
     except Exception as e:
-        logger.warning(f"Failed to start Beads MCP: {e}")
+        logger.warning(f"Failed to start Beads MCP (fallback CLI tools available): {e}")
 
     # Additional user-configured MCP servers
     for cmd in settings.mcp_server_commands:

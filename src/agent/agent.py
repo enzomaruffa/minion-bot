@@ -402,16 +402,16 @@ def _get_learning_machine() -> LearningMachine:
     return LearningMachine(
         db=db,
         model=model,
-        # Structured profile: name, preferences — auto-extracted always
-        user_profile=UserProfileConfig(mode=LearningMode.ALWAYS),
+        # Structured profile: name, preferences — only when agent decides
+        user_profile=UserProfileConfig(mode=LearningMode.AGENTIC),
         # Unstructured observations — agent decides what to save
         user_memory=UserMemoryConfig(mode=LearningMode.AGENTIC),
-        # Session goals, plan, progress — auto-tracked
-        session_context=SessionContextConfig(mode=LearningMode.ALWAYS),
-        # Facts about external entities (people, companies, services) — auto
-        entity_memory=EntityMemoryConfig(mode=LearningMode.ALWAYS),
-        # Decisions with reasoning — auto
-        decision_log=DecisionLogConfig(mode=LearningMode.ALWAYS),
+        # Session goals, plan, progress — only when agent decides
+        session_context=SessionContextConfig(mode=LearningMode.AGENTIC),
+        # Facts about external entities (people, companies, services)
+        entity_memory=EntityMemoryConfig(mode=LearningMode.AGENTIC),
+        # Decisions with reasoning
+        decision_log=DecisionLogConfig(mode=LearningMode.AGENTIC),
         namespace="user",
     )
 
@@ -546,9 +546,9 @@ def create_agent(mcp_tools: list | None = None) -> Agent:
         add_learnings_to_context=True,
         # Session history
         add_history_to_context=True,
-        num_history_runs=10,
+        num_history_runs=5,
         read_chat_history=True,
-        max_tool_calls_from_history=5,
+        max_tool_calls_from_history=3,
         # Context enhancements
         add_datetime_to_context=True,
     )
@@ -621,6 +621,12 @@ async def chat(message: str, format_hint: str = "telegram") -> str:
         )
 
         content = response.content or ""
+
+        # Guard against empty responses (model only emitted tool calls)
+        if not content.strip():
+            logger.warning("Agent returned empty content after tool calls, using fallback")
+            content = "Done."
+
         logger.info(f"Chat output (raw): {content[:100]}{'...' if len(content) > 100 else ''}")
 
         formatted = await _format_output(content, format_hint)

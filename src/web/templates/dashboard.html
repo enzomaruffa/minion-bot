@@ -72,4 +72,16 @@
 </div>
 {% endfor %}
 {% endif %}
+
+{% if heartbeat_logs %}
+<h4>Recent Activity</h4>
+{% for log in heartbeat_logs %}
+<div class="task-row">
+    <span class="task-id">{{ log.created_at.strftime('%b %d %H:%M') }}</span>
+    <span class="badge {% if log.action_type == 'notify' %}badge-high{% elif log.action_type == 'research' %}badge-medium{% else %}badge-low{% endif %}">{{ log.action_type }}</span>
+    <span class="task-title">{{ log.summary[:80] }}{% if log.summary|length > 80 %}...{% endif %}</span>
+    {% if log.notified %}&#128276;{% endif %}
+</div>
+{% endfor %}
+{% endif %}
 {% endblock %}

@@ -1,0 +1,16 @@
+<div class="task-row" id="interest-{{ i.id }}">
+    <input type="checkbox" {% if i.active %}checked{% endif %}
+        hx-patch="/app/interests/{{ i.id }}" hx-vals='{"active": "{{ 'false' if i.active else 'true' }}"}'
+        hx-target="#interest-{{ i.id }}" hx-swap="outerHTML"
+        style="margin: 0; width: auto;" title="Toggle active">
+    <span class="task-title" {% if not i.active %}style="color: var(--pico-muted-color);"{% endif %}>
+        {{ i.topic }}
+        {% if i.description %}<br><small class="muted">{{ i.description[:80] }}</small>{% endif %}
+    </span>
+    <span class="badge {% if i.priority == 3 %}badge-high{% elif i.priority == 2 %}badge-medium{% else %}badge-low{% endif %}">P{{ i.priority }}</span>
+    <small class="muted">Every {{ i.check_interval_hours }}h</small>
+    <small class="muted">{% if i.last_checked_at %}{{ i.last_checked_at.strftime('%b %d %H:%M') }}{% else %}never{% endif %}</small>
+    <button class="outline secondary btn-icon"
+        hx-delete="/app/interests/{{ i.id }}" hx-target="#interest-{{ i.id }}" hx-swap="outerHTML"
+        hx-confirm="Delete interest?">&#10005;</button>
+</div>

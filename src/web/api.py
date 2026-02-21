@@ -16,17 +16,20 @@ from src.db.queries import (
     check_shopping_item,
     create_bookmark,
     create_contact,
+    create_interest,
     create_reminder,
     create_shopping_item,
     create_task,
     create_user_project,
     delete_bookmark,
     delete_contact,
+    delete_interest,
     delete_reminder,
     delete_shopping_item,
     delete_task,
     get_bookmark,
     get_contact,
+    get_interest,
     get_mood_history,
     get_mood_stats,
     get_subtasks,
@@ -37,12 +40,14 @@ from src.db.queries import (
     list_bookmarks,
     list_calendar_events_range,
     list_contacts,
+    list_interests,
     list_shopping_items,
     list_tasks_by_status,
     list_user_projects,
     log_mood,
     mark_bookmark_read,
     update_contact,
+    update_interest,
     update_task,
     update_user_project,
     upsert_user_profile,
@@ -57,6 +62,9 @@ from src.web.serializers import (
     ContactCreate,
     ContactOut,
     ContactUpdate,
+    InterestCreate,
+    InterestOut,
+    InterestUpdate,
     MoodLogCreate,
     MoodLogOut,
     ProfileOut,
@@ -689,6 +697,70 @@ async def api_weather():
         if not data:
             raise HTTPException(502, "Weather data unavailable")
         return {"weather": format_weather(data), "city": p.city}
+
+
+# ============================================================================
+# Interests
+# ============================================================================
+
+
+def _interest_to_out(i) -> InterestOut:
+    return InterestOut(
+        id=i.id,
+        topic=i.topic,
+        description=i.description,
+        priority=i.priority,
+        active=i.active,
+        check_interval_hours=i.check_interval_hours,
+        last_checked_at=i.last_checked_at,
+        created_at=i.created_at,
+    )
+
+
+@router.get("/interests", dependencies=[Depends(get_current_user)])
+async def api_list_interests(active_only: bool = False) -> list[InterestOut]:
+    with session_scope() as session:
+        interests = list_interests(session, active_only=active_only)
+        return [_interest_to_out(i) for i in interests]
+
+
+@router.get("/interests/{interest_id}", dependencies=[Depends(get_current_user)])
+async def api_get_interest(interest_id: int) -> InterestOut:
+    with session_scope() as session:
+        i = get_interest(session, interest_id)
+        if not i:
+            raise HTTPException(404, "Interest not found")
+        return _interest_to_out(i)
+
+
+@router.post("/interests", dependencies=[Depends(get_current_user)], status_code=201)
+async def api_create_interest(body: InterestCreate) -> InterestOut:
+    with session_scope() as session:
+        i = create_interest(
+            session,
+            topic=body.topic,
+            description=body.description,
+            priority=body.priority,
+            check_interval_hours=body.check_interval_hours,
+        )
+        return _interest_to_out(i)
+
+
+@router.patch("/interests/{interest_id}", dependencies=[Depends(get_current_user)])
+async def api_update_interest(interest_id: int, body: InterestUpdate) -> InterestOut:
+    with session_scope() as session:
+        kwargs = body.model_dump(exclude_none=True)
+        i = update_interest(session, interest_id, **kwargs)
+        if not i:
+            raise HTTPException(404, "Interest not found")
+        return _interest_to_out(i)
+
+
+@router.delete("/interests/{interest_id}", dependencies=[Depends(get_current_user)], status_code=204)
+async def api_delete_interest(interest_id: int):
+    with session_scope() as session:
+        if not delete_interest(session, interest_id):
+            raise HTTPException(404, "Interest not found")
 
 
 # ============================================================================

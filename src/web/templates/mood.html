@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Mood - Minion{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4/dist/chart.umd.min.js"></script>
+{% endblock %}
 {% block content %}
 <h2>Mood Tracker</h2>
 
@@ -19,6 +22,12 @@
         <div class="label">Best ({{ stats.best_day }})</div>
     </div>
     {% endif %}
+</div>
+{% endif %}
+
+{% if logs %}
+<div style="margin-bottom:2rem;height:300px">
+    <canvas id="moodChart"></canvas>
 </div>
 {% endif %}
 
@@ -44,4 +53,46 @@
 <p class="empty-state">No mood logs yet.</p>
 {% endfor %}
 </div>
+
+{% if logs %}
+<script>
+(function() {
+    const labels = [{% for m in logs|reverse %}"{{ m.date.strftime('%b %d') }}"{% if not loop.last %},{% endif %}{% endfor %}];
+    const data = [{% for m in logs|reverse %}{{ m.score }}{% if not loop.last %},{% endif %}{% endfor %}];
+
+    new Chart(document.getElementById('moodChart'), {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                borderColor: 'rgb(129,140,248)',
+                backgroundColor: 'rgba(129,140,248,0.1)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: {
+                    min: 0,
+                    max: 5,
+                    ticks: { stepSize: 1, color: 'rgba(255,255,255,0.5)' },
+                    grid: { color: 'rgba(255,255,255,0.08)' },
+                },
+                x: {
+                    ticks: { color: 'rgba(255,255,255,0.5)', maxRotation: 45 },
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                }
+            }
+        }
+    });
+})();
+</script>
+{% endif %}
 {% endblock %}

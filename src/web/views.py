@@ -14,12 +14,15 @@ from src.db.queries import (
     check_shopping_item,
     create_bookmark,
     create_contact,
+    create_interest,
     create_shopping_item,
     create_task,
     delete_bookmark,
     delete_contact,
+    delete_interest,
     delete_shopping_item,
     delete_task,
+    get_interest,
     get_mood_history,
     get_mood_stats,
     get_subtasks,
@@ -28,13 +31,16 @@ from src.db.queries import (
     list_bookmarks,
     list_calendar_events_range,
     list_contacts,
+    list_interests,
     list_overdue_tasks,
     list_pending_reminders,
+    list_recent_heartbeat_logs,
     list_shopping_items,
     list_tasks_by_status,
     list_tasks_due_on_date,
     log_mood,
     mark_bookmark_read,
+    update_interest,
     update_task,
     upsert_user_profile,
 )
@@ -86,6 +92,8 @@ async def dashboard(request: Request):
                 weather = format_weather(data)
                 city = profile.city
 
+        heartbeat_logs = list_recent_heartbeat_logs(session, limit=10)
+
         return _templates().TemplateResponse(
             request,
             "dashboard.html",
@@ -101,6 +109,7 @@ async def dashboard(request: Request):
                 "reminders": today_reminders,
                 "weather": weather,
                 "city": city,
+                "heartbeat_logs": heartbeat_logs,
             },
         )
 
@@ -398,6 +407,87 @@ async def log_mood_view(request: Request, score: int = Form(...), note: str = Fo
     with session_scope() as session:
         m = log_mood(session, date=date, score=score, note=note or None)
         return _templates().TemplateResponse(request, "partials/mood_row.html", {"m": m})
+
+
+# ============================================================================
+# Interests
+# ============================================================================
+
+
+@router.get("/interests", response_class=HTMLResponse, dependencies=[Depends(get_current_user)])
+async def interests_page(request: Request, active: str | None = None):
+    active_filter = None
+    if active == "true":
+        active_filter = True
+    elif active == "false":
+        active_filter = False
+
+    with session_scope() as session:
+        if active_filter is None:
+            interests = list_interests(session, active_only=False)
+        elif active_filter:
+            interests = list_interests(session, active_only=True)
+        else:
+            all_interests = list_interests(session, active_only=False)
+            interests = [i for i in all_interests if not i.active]
+
+        return _templates().TemplateResponse(
+            request,
+            "interests.html",
+            {
+                "active_page": "interests",
+                "interests": interests,
+                "active_filter": active_filter,
+            },
+        )
+
+
+@router.post("/interests", response_class=HTMLResponse, dependencies=[Depends(get_current_user)])
+async def create_interest_view(
+    request: Request,
+    topic: str = Form(...),
+    description: str = Form(""),
+    priority: int = Form(1),
+    check_interval_hours: int = Form(24),
+):
+    with session_scope() as session:
+        i = create_interest(
+            session,
+            topic=topic,
+            description=description or None,
+            priority=priority,
+            check_interval_hours=check_interval_hours,
+        )
+        return _templates().TemplateResponse(request, "partials/interest_row.html", {"i": i})
+
+
+@router.patch("/interests/{interest_id}", response_class=HTMLResponse, dependencies=[Depends(get_current_user)])
+async def update_interest_view(request: Request, interest_id: int):
+    form = await request.form()
+    kwargs = {}
+    if "active" in form:
+        kwargs["active"] = form["active"].lower() == "true"
+    if "topic" in form and form["topic"]:
+        kwargs["topic"] = form["topic"]
+    if "description" in form:
+        kwargs["description"] = form["description"] or None
+    if "priority" in form and form["priority"]:
+        kwargs["priority"] = int(form["priority"])
+    if "check_interval_hours" in form and form["check_interval_hours"]:
+        kwargs["check_interval_hours"] = int(form["check_interval_hours"])
+
+    with session_scope() as session:
+        i = update_interest(session, interest_id, **kwargs)
+        if not i:
+            return HTMLResponse("")
+        return _templates().TemplateResponse(request, "partials/interest_row.html", {"i": i})
+
+
+@router.delete("/interests/{interest_id}", dependencies=[Depends(get_current_user)])
+async def delete_interest_view(interest_id: int):
+    with session_scope() as session:
+        delete_interest(session, interest_id)
+    return HTMLResponse("")
 
 
 # ============================================================================

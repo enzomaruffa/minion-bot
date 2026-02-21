@@ -210,6 +210,33 @@ class CalendarEventOut(BaseModel):
     end_time: datetime
 
 
+# --- Interests ---
+class InterestOut(BaseModel):
+    id: int
+    topic: str
+    description: str | None = None
+    priority: int
+    active: bool
+    check_interval_hours: int
+    last_checked_at: datetime | None = None
+    created_at: datetime
+
+
+class InterestCreate(BaseModel):
+    topic: str
+    description: str | None = None
+    priority: int = 1
+    check_interval_hours: int = 24
+
+
+class InterestUpdate(BaseModel):
+    topic: str | None = None
+    description: str | None = None
+    priority: int | None = None
+    active: bool | None = None
+    check_interval_hours: int | None = None
+
+
 # --- Chat ---
 class ChatRequest(BaseModel):
     message: str

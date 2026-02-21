@@ -483,3 +483,72 @@ MIGRATIONS.append(
         _014_dedup_recurring_tasks,
     )
 )
+
+
+def _015_dedup_recurring_tasks_v2(session: Session) -> None:
+    """Re-run recurring dedup with correct case (status stored as uppercase)."""
+    from collections import defaultdict
+
+    # 1) Delete duplicate TODO recurring tasks, keep only latest per group
+    rows = session.execute(
+        text("""
+            SELECT id, title, recurrence_rule, due_date
+            FROM tasks
+            WHERE recurrence_rule IS NOT NULL
+              AND upper(status) = 'TODO'
+            ORDER BY title, due_date DESC
+        """)
+    ).fetchall()
+
+    groups: dict[tuple[str, str], list[int]] = defaultdict(list)
+    for row in rows:
+        groups[(row[1], row[2])].append(row[0])
+
+    deleted = 0
+    for key, ids in groups.items():
+        if len(ids) <= 1:
+            continue
+        to_delete = ids[1:]
+        placeholders = ",".join(str(i) for i in to_delete)
+        session.execute(text(f"DELETE FROM reminders WHERE task_id IN ({placeholders})"))
+        session.execute(text(f"DELETE FROM tasks WHERE id IN ({placeholders})"))
+        deleted += len(to_delete)
+
+    # 2) Strip recurrence_rule from DONE tasks that have a non-cancelled successor
+    done_recurring = session.execute(
+        text("""
+            SELECT id FROM tasks
+            WHERE recurrence_rule IS NOT NULL AND upper(status) = 'DONE'
+        """)
+    ).fetchall()
+
+    stripped = 0
+    for row in done_recurring:
+        task_id = row[0]
+        has_successor = session.execute(
+            text("""
+                SELECT 1 FROM tasks
+                WHERE recurrence_source_id = :tid AND upper(status) != 'CANCELLED'
+                LIMIT 1
+            """),
+            {"tid": task_id},
+        ).fetchone()
+        if has_successor:
+            session.execute(
+                text("UPDATE tasks SET recurrence_rule = NULL WHERE id = :tid"),
+                {"tid": task_id},
+            )
+            stripped += 1
+
+    session.flush()
+    if deleted or stripped:
+        logger.info(f"Recurring cleanup v2: deleted {deleted} duplicates, stripped rule from {stripped} old DONE tasks")
+
+
+MIGRATIONS.append(
+    (
+        "015_dedup_recurring_tasks_v2",
+        "Re-run recurring dedup with correct uppercase status matching",
+        _015_dedup_recurring_tasks_v2,
+    )
+)

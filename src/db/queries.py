@@ -1011,17 +1011,22 @@ def upsert_user_profile(session: Session, **fields) -> UserProfile:
 
 
 def list_completed_recurring_tasks(session: Session) -> Sequence[Task]:
-    """Get completed recurring tasks that need a new instance generated."""
+    """Get completed recurring tasks that need a new instance generated.
+
+    Only the latest completed task in a recurrence chain should generate a new
+    instance.  We exclude any task that already has a non-cancelled successor
+    (regardless of status) — if the successor is DONE, *it* will be the one to
+    generate the next instance on its own turn.
+    """
     stmt = _task_query().where(Task.status == TaskStatus.DONE).where(Task.recurrence_rule.isnot(None))
     tasks = session.scalars(stmt).all()
 
-    # Filter in Python: exclude tasks that already have a pending successor
     result = []
     for task in tasks:
         successor = session.scalars(
             select(Task)
             .where(Task.recurrence_source_id == task.id)
-            .where(Task.status.in_([TaskStatus.TODO, TaskStatus.IN_PROGRESS]))
+            .where(Task.status != TaskStatus.CANCELLED)
         ).first()
         if not successor:
             result.append(task)

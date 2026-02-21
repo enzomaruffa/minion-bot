@@ -34,7 +34,7 @@
 <h4>Log Today</h4>
 <form class="inline-form" hx-post="/app/mood" hx-target="#mood-list" hx-swap="afterbegin" hx-on::after-request="this.reset();" style="margin-bottom: 1.5rem;">
     <div style="display: flex; gap: 0.75rem;">
-        {% for score, emoji in [(1, '&#128542;'), (2, '&#128533;'), (3, '&#128528;'), (4, '&#128578;'), (5, '&#128516;')] %}
+        {% for score, emoji in [(1, '😞'), (2, '😕'), (3, '😐'), (4, '🙂'), (5, '😄')] %}
         <label style="cursor: pointer; font-size: 1.5rem; text-align: center;">
             <input type="radio" name="score" value="{{ score }}" style="display: block; margin: 0 auto;" {% if score == 3 %}checked{% endif %}>
             {{ emoji }}

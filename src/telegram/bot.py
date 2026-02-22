@@ -40,15 +40,38 @@ logger = logging.getLogger(__name__)
 
 
 async def safe_reply(message, text: str) -> None:
-    """Reply with HTML, falling back to plain text if parsing fails."""
-    try:
-        await message.reply_text(text, parse_mode="HTML")
-    except BadRequest as e:
-        if "Can't parse entities" in str(e):
-            logger.warning(f"HTML parse failed, sending as plain text: {e}")
-            await message.reply_text(text)
-        else:
-            raise
+    """Reply with HTML, falling back to plain text if parsing fails.
+    Splits long messages to stay within Telegram's 4096-char limit."""
+    MAX_LEN = 4096
+    chunks: list[str] = []
+    if len(text) <= MAX_LEN:
+        chunks = [text]
+    else:
+        current = ""
+        for line in text.split("\n"):
+            candidate = (current + "\n" + line) if current else line
+            if len(candidate) > MAX_LEN:
+                if current:
+                    chunks.append(current)
+                # If a single line exceeds the limit, hard-split it
+                while len(line) > MAX_LEN:
+                    chunks.append(line[:MAX_LEN])
+                    line = line[MAX_LEN:]
+                current = line
+            else:
+                current = candidate
+        if current:
+            chunks.append(current)
+
+    for chunk in chunks:
+        try:
+            await message.reply_text(chunk, parse_mode="HTML")
+        except BadRequest as e:
+            if "Can't parse entities" in str(e):
+                logger.warning(f"HTML parse failed, sending as plain text: {e}")
+                await message.reply_text(chunk)
+            else:
+                raise
 
 
 @require_auth
@@ -204,25 +227,47 @@ def create_application() -> Application:
 
 
 async def send_message(text: str, parse_mode: str = "HTML") -> None:
-    """Send a proactive message to the user."""
+    """Send a proactive message to the user.
+    Splits long messages to stay within Telegram's 4096-char limit."""
     from telegram import Bot
 
+    MAX_LEN = 4096
+    chunks: list[str] = []
+    if len(text) <= MAX_LEN:
+        chunks = [text]
+    else:
+        current = ""
+        for line in text.split("\n"):
+            candidate = (current + "\n" + line) if current else line
+            if len(candidate) > MAX_LEN:
+                if current:
+                    chunks.append(current)
+                while len(line) > MAX_LEN:
+                    chunks.append(line[:MAX_LEN])
+                    line = line[MAX_LEN:]
+                current = line
+            else:
+                current = candidate
+        if current:
+            chunks.append(current)
+
     bot = Bot(token=settings.telegram_bot_token)
-    try:
-        await bot.send_message(
-            chat_id=settings.telegram_user_id,
-            text=text,
-            parse_mode=parse_mode,
-        )
-    except BadRequest as e:
-        if "Can't parse entities" in str(e):
-            logger.warning(f"HTML parse failed in send_message, sending plain: {e}")
+    for chunk in chunks:
+        try:
             await bot.send_message(
                 chat_id=settings.telegram_user_id,
-                text=text,
+                text=chunk,
+                parse_mode=parse_mode,
             )
-        else:
-            raise
+        except BadRequest as e:
+            if "Can't parse entities" in str(e):
+                logger.warning(f"HTML parse failed in send_message, sending plain: {e}")
+                await bot.send_message(
+                    chat_id=settings.telegram_user_id,
+                    text=chunk,
+                )
+            else:
+                raise
 
 
 def register_notification_handler() -> None:

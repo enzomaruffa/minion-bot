@@ -29,11 +29,13 @@ from src.agent.tools.heartbeat_tools import (
     delegate_task_work,
     log_heartbeat_action,
     send_proactive_notification,
+    task_nudge_dedup_key,
 )
 from src.config import settings
 from src.db import session_scope
 from src.db.models import TaskStatus
 from src.db.queries import (
+    get_user_profile,
     list_due_interests,
     list_recent_heartbeat_logs,
     list_tasks_by_status,
@@ -69,13 +71,30 @@ WHAT YOU CAN DO:
 RULES:
 - Max {max_notifications} notifications per run
 - ALWAYS check_dedup before notifying (skip if sent within interval)
+- For overdue task nudges, use task_nudge_dedup_key(task_id) to get the correct dedup key format ("task_nudge_{{ID}}")
+- Do NOT nag about the same task more than once per 24h — if already in recent actions, SKIP
+- Prefer actionable help (research, price comparison, prep work) over "this is overdue" reminders
 - High-priority interests first
 - Be concise — user is busy
 - If shopping list has items, consider searching for prices/availability
 - If tasks have deadlines approaching, consider what preparatory work you can do
 - Log EVERY action with log_heartbeat_action (even "skip")
 - Do NOT notify unless you have something genuinely useful to share
+
+{quiet_hours_note}
 """
+
+
+def _get_quiet_hours_note() -> str:
+    """Return quiet hours note for the heartbeat prompt."""
+    from src.agent.tools.heartbeat_tools import _is_quiet_hours
+
+    if not _is_quiet_hours():
+        return ""
+    with session_scope() as session:
+        profile = get_user_profile(session)
+        wake_hour = profile.work_start_hour if profile and profile.work_start_hour is not None else 9
+    return f"QUIET HOURS ACTIVE — notifications are suppressed until {wake_hour}:00. Focus on research and prep work."
 
 
 def _build_context() -> str:
@@ -195,6 +214,7 @@ def _create_heartbeat_agent() -> Agent:
             check_dedup,
             log_heartbeat_action,
             send_proactive_notification,
+            task_nudge_dedup_key,
             delegate_research,
             delegate_task_work,
             # Beads
@@ -223,11 +243,14 @@ async def run_heartbeat() -> None:
         interests = _build_interests_context()
         recent_actions = _build_recent_actions()
 
+        quiet_hours_note = _get_quiet_hours_note()
+
         prompt = HEARTBEAT_PROMPT.format(
             context=context,
             interests=interests,
             recent_actions=recent_actions,
             max_notifications=settings.heartbeat_max_notifications,
+            quiet_hours_note=quiet_hours_note,
         )
 
         agent = _create_heartbeat_agent()

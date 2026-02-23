@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 from datetime import datetime, timedelta
 
 from src.config import settings
@@ -10,10 +11,50 @@ from src.db.queries import (
     check_heartbeat_dedup,
     create_heartbeat_log,
     get_interest,
+    get_user_profile,
 )
 from src.notifications import notify
 
 logger = logging.getLogger(__name__)
+
+
+def _is_quiet_hours() -> bool:
+    """Check if current time is within quiet hours (before work_start_hour)."""
+    now = datetime.now(settings.timezone)
+    with session_scope() as session:
+        profile = get_user_profile(session)
+        wake_hour = profile.work_start_hour if profile and profile.work_start_hour is not None else 9
+    return now.hour < wake_hour
+
+
+def _extract_task_ids(message: str) -> list[int]:
+    """Extract task IDs from #N patterns in a message."""
+    return [int(m) for m in re.findall(r"#(\d+)", message)]
+
+
+def _all_tasks_recently_nudged(task_ids: list[int], within_hours: int = 24) -> bool:
+    """Check if ALL referenced tasks were already nudged within the window."""
+    if not task_ids:
+        return False
+    since = datetime.now(settings.timezone).replace(tzinfo=None) - timedelta(hours=within_hours)
+    with session_scope() as session:
+        for tid in task_ids:
+            if not check_heartbeat_dedup(session, f"task_nudge_{tid}", since):
+                return False
+    return True
+
+
+def _auto_log_task_nudges(task_ids: list[int]) -> None:
+    """Log task_nudge entries for dedup tracking."""
+    with session_scope() as session:
+        for tid in task_ids:
+            create_heartbeat_log(
+                session,
+                dedup_key=f"task_nudge_{tid}",
+                action_type="notify",
+                summary=f"Nudged user about task #{tid}",
+                notified=True,
+            )
 
 
 def check_dedup(dedup_key: str, within_hours: int = 24) -> str:
@@ -77,16 +118,42 @@ def send_proactive_notification(message: str) -> str:
     Returns:
         Confirmation message.
     """
+    # Gate: quiet hours
+    if _is_quiet_hours():
+        logger.info("Notification suppressed — quiet hours")
+        return "Notification suppressed — quiet hours. Focus on research and prep work instead."
+
+    # Gate: task nudge dedup
+    task_ids = _extract_task_ids(message)
+    if task_ids and _all_tasks_recently_nudged(task_ids):
+        logger.info(f"Suppressed duplicate task nudge for tasks {task_ids}")
+        return f"Suppressed duplicate task nudge — tasks {task_ids} already nudged in last 24h."
+
     try:
         loop = asyncio.get_running_loop()
         loop.create_task(notify(message))
-        return "Notification sent."
     except RuntimeError:
-        # No event loop — run synchronously
         asyncio.run(notify(message))
-        return "Notification sent."
     except Exception as e:
         return f"Failed to send notification: {e}"
+
+    # Auto-log task nudges for future dedup
+    if task_ids:
+        _auto_log_task_nudges(task_ids)
+
+    return "Notification sent."
+
+
+def task_nudge_dedup_key(task_id: int) -> str:
+    """Get the standard dedup key for nudging a task. Use this with check_dedup before notifying about overdue tasks.
+
+    Args:
+        task_id: The task ID to generate a dedup key for.
+
+    Returns:
+        The dedup key string in format "task_nudge_{id}".
+    """
+    return f"task_nudge_{task_id}"
 
 
 def delegate_research(topic: str, question: str) -> str:

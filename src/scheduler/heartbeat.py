@@ -183,6 +183,7 @@ async def _run_heartbeat_sdk(prompt: str) -> str | None:
     )
 
     options = ClaudeAgentOptions(
+        model=settings.heartbeat_model,
         system_prompt=prompt,
         mcp_servers={"hb": heartbeat_server},
         allowed_tools=[f"mcp__hb__{t.name}" for t in HEARTBEAT_TOOLS],

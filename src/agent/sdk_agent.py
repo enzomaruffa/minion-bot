@@ -234,6 +234,7 @@ async def chat(message: str, format_hint: str = "telegram") -> str:
         logger.warning(f"Failed to configure external MCP servers: {e}")
 
     options = ClaudeAgentOptions(
+        model=settings.agent_model,
         system_prompt=_build_system_prompt(format_hint),
         mcp_servers=mcp_servers,
         allowed_tools=_build_allowed_tools(),
@@ -294,6 +295,7 @@ async def chat_stream(message: str, format_hint: str = "telegram"):
         logger.warning(f"Failed to configure external MCP servers: {e}")
 
     options = ClaudeAgentOptions(
+        model=settings.agent_model,
         system_prompt=_build_system_prompt(format_hint),
         mcp_servers=mcp_servers,
         allowed_tools=_build_allowed_tools(),

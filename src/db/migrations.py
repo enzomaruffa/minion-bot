@@ -552,3 +552,33 @@ MIGRATIONS.append(
         _015_dedup_recurring_tasks_v2,
     )
 )
+
+
+# ── Migration 016: Agent memories table ──────────────────────────────────
+
+
+def _016_agent_memories(session: Session) -> None:
+    """Create agent_memories table for long-term explicit memory."""
+    session.execute(
+        text("""
+        CREATE TABLE IF NOT EXISTS agent_memories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key VARCHAR(200) NOT NULL UNIQUE,
+            content TEXT NOT NULL,
+            category VARCHAR(50) NOT NULL DEFAULT 'fact',
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    )
+    session.flush()
+    logger.info("Created agent_memories table")
+
+
+MIGRATIONS.append(
+    (
+        "016_agent_memories",
+        "Create agent_memories table for long-term explicit memory",
+        _016_agent_memories,
+    )
+)

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql import Select
 
 from .models import (
+    AgentMemory,
     Attachment,
     Bookmark,
     CalendarEvent,
@@ -1366,3 +1367,52 @@ def list_recent_heartbeat_logs(session: Session, limit: int = 20) -> Sequence[He
     """List recent heartbeat log entries."""
     stmt = select(HeartbeatLog).order_by(HeartbeatLog.created_at.desc()).limit(limit)
     return session.scalars(stmt).all()
+
+
+# ============================================================================
+# Agent Memory Queries
+# ============================================================================
+
+
+def save_agent_memory(session: Session, key: str, content: str, category: str = "fact") -> AgentMemory:
+    """Upsert a memory entry — create or update by key."""
+    existing = session.scalars(select(AgentMemory).where(AgentMemory.key == key)).first()
+    if existing:
+        existing.content = content
+        existing.category = category
+        existing.updated_at = datetime.now(UTC)
+        session.flush()
+        return existing
+    memory = AgentMemory(key=key, content=content, category=category)
+    session.add(memory)
+    session.flush()
+    return memory
+
+
+def search_agent_memories(session: Session, query: str, limit: int = 10) -> Sequence[AgentMemory]:
+    """Search memories by key and content (LIKE query)."""
+    pattern = f"%{query}%"
+    stmt = (
+        select(AgentMemory)
+        .where((AgentMemory.key.ilike(pattern)) | (AgentMemory.content.ilike(pattern)))
+        .order_by(AgentMemory.updated_at.desc())
+        .limit(limit)
+    )
+    return session.scalars(stmt).all()
+
+
+def list_agent_memories(
+    session: Session, limit: int = 20, category: str | None = None
+) -> Sequence[AgentMemory]:
+    """List recent memories, optionally filtered by category."""
+    stmt = select(AgentMemory).order_by(AgentMemory.updated_at.desc()).limit(limit)
+    if category:
+        stmt = stmt.where(AgentMemory.category == category)
+    return session.scalars(stmt).all()
+
+
+def delete_agent_memory(session: Session, key: str) -> bool:
+    """Delete a memory by key. Returns True if found and deleted."""
+    result = session.execute(delete(AgentMemory).where(AgentMemory.key == key))
+    session.flush()
+    return result.rowcount > 0

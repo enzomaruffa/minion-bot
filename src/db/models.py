@@ -271,6 +271,19 @@ class HeartbeatLog(Base):
     interest: Mapped[Optional["UserInterest"]] = relationship()
 
 
+class AgentMemory(Base):
+    """Long-term memory for the agent — preferences, facts, decisions."""
+
+    __tablename__ = "agent_memories"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(200), unique=True)
+    content: Mapped[str] = mapped_column(Text)
+    category: Mapped[str] = mapped_column(String(50), default="fact")  # preference, fact, person, decision, workflow
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+
+
 class UserCalendarToken(Base):
     """Stores Google Calendar OAuth tokens per Telegram user."""
 

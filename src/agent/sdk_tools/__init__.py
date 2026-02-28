@@ -161,6 +161,7 @@ from src.agent.tools.interests import (  # noqa: E402
     remove_interest,
     update_interest_tool,
 )
+from src.agent.tools.memory import forget_memory, list_memories, recall_memory, save_memory  # noqa: E402
 from src.agent.tools.mood import log_mood, mood_summary, show_mood_history  # noqa: E402
 from src.agent.tools.notes import (  # noqa: E402
     append_to_note_tool,
@@ -368,6 +369,11 @@ _AUTO_WRAP_MAIN = [
     beads_create,
     beads_list,
     beads_ready,
+    # Memory
+    save_memory,
+    recall_memory,
+    list_memories,
+    forget_memory,
 ]
 
 _AUTO_WRAP_HEARTBEAT_ONLY = [

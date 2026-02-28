@@ -3,34 +3,9 @@
 import logging
 from datetime import datetime
 
-from agno.agent import Agent
-from agno.models.openai import OpenAIChat
-
-from src.agent.agent import get_db, tool_logger_hook
-from src.agent.tools import (
-    beads_create,
-    beads_list,
-    beads_ready,
-    fetch_url,
-    get_agenda,
-    get_current_datetime,
-    get_overdue_tasks,
-    get_weather,
-    list_interests,
-    list_tasks,
-    run_python_code,
-    run_shell_command,
-    show_mood_history,
-    web_search,
-)
-from src.agent.tools.heartbeat_tools import (
-    check_dedup,
-    delegate_research,
-    delegate_task_work,
-    log_heartbeat_action,
-    send_proactive_notification,
-    task_nudge_dedup_key,
-)
+from src.agent.tools.agenda import get_agenda
+from src.agent.tools.mood import show_mood_history
+from src.agent.tools.profile import get_weather
 from src.config import settings
 from src.db import session_scope
 from src.db.models import TaskStatus
@@ -188,49 +163,6 @@ def _build_recent_actions() -> str:
         return "\n".join(lines)
 
 
-def _create_heartbeat_agent() -> Agent:
-    """Create a lightweight Agno agent for heartbeat runs."""
-    return Agent(
-        model=OpenAIChat(
-            id=settings.heartbeat_model,
-            api_key=settings.openai_api_key,
-        ),
-        tools=[
-            # Context tools (read-only)
-            get_current_datetime,
-            get_agenda,
-            get_overdue_tasks,
-            list_tasks,
-            get_weather,
-            show_mood_history,
-            list_interests,
-            # Web tools
-            web_search,
-            fetch_url,
-            # Code execution
-            run_python_code,
-            run_shell_command,
-            # Heartbeat-specific tools
-            check_dedup,
-            log_heartbeat_action,
-            send_proactive_notification,
-            task_nudge_dedup_key,
-            delegate_research,
-            delegate_task_work,
-            # Beads
-            beads_create,
-            beads_list,
-            beads_ready,
-        ],
-        markdown=True,
-        tool_hooks=[tool_logger_hook],
-        db=get_db(),
-        add_history_to_context=True,
-        num_history_runs=3,
-        add_datetime_to_context=True,
-    )
-
-
 async def _run_heartbeat_sdk(prompt: str) -> str | None:
     """Run a heartbeat cycle using the Claude Agent SDK."""
     from claude_agent_sdk import (
@@ -297,19 +229,7 @@ async def run_heartbeat() -> None:
             quiet_hours_note=quiet_hours_note,
         )
 
-        if settings.agent_sdk_enabled:
-            response_content = await _run_heartbeat_sdk(prompt)
-        else:
-            import asyncio
-
-            agent = _create_heartbeat_agent()
-            response = await asyncio.to_thread(
-                agent.run,
-                prompt,
-                user_id=str(settings.telegram_user_id),
-                session_id="heartbeat",
-            )
-            response_content = response.content
+        response_content = await _run_heartbeat_sdk(prompt)
 
         # Mark checked interests as checked
         with session_scope() as session:

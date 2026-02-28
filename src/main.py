@@ -53,25 +53,11 @@ def register_jobs() -> None:
 
 
 async def _init_mcp_and_agent() -> None:
-    """Initialize MCP servers and recreate agent with MCP tools."""
-    try:
-        from src.agent.mcp import init_mcp_servers
+    """Initialize MCP servers and recreate agent with MCP tools.
 
-        mcp_tools = await init_mcp_servers()
-        if mcp_tools:
-            from src.agent.agent import create_agent, reset_agent
-
-            reset_agent()
-            # Agent will be lazily recreated with MCP tools on next get_agent() call
-            # Store MCP tools for the singleton to pick up
-            import src.agent.agent as agent_module
-
-            agent_module._agent = create_agent(mcp_tools=mcp_tools)
-            logger.info(f"Agent recreated with {len(mcp_tools)} MCP server(s)")
-        else:
-            logger.info("No MCP servers connected, using agent without MCP tools")
-    except Exception as e:
-        logger.warning(f"MCP initialization failed (non-fatal): {e}")
+    In SDK mode, MCP is handled natively by ClaudeAgentOptions — this is a no-op.
+    """
+    logger.info("Claude Agent SDK handles MCP natively — skipping MCP init")
 
 
 async def post_init(application) -> None:
@@ -93,13 +79,14 @@ async def post_shutdown(application) -> None:
     logger.info("Stopping scheduler...")
     shutdown_scheduler()
 
-    logger.info("Closing MCP servers...")
+    logger.info("Cleaning up agent...")
     try:
-        from src.agent.mcp import close_mcp_servers
+        from src.agent import shutdown
 
-        await close_mcp_servers()
+        if shutdown:
+            await shutdown()
     except Exception as e:
-        logger.warning(f"Error closing MCP servers: {e}")
+        logger.warning(f"Error shutting down agent: {e}")
 
 
 def start_web_server() -> None:

@@ -22,7 +22,6 @@ from src.db.queries import (
     delete_interest,
     delete_shopping_item,
     delete_task,
-    get_interest,
     get_mood_history,
     get_mood_stats,
     get_subtasks,

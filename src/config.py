@@ -12,7 +12,7 @@ load_dotenv()
 class Settings:
     telegram_bot_token: str | None
     telegram_user_id: int
-    openai_api_key: str
+    openai_api_key: str | None  # Optional — only needed for vision/voice
     google_credentials_path: Path
     google_token_path: Path
     database_path: Path
@@ -26,9 +26,8 @@ class Settings:
     web_session_ttl_days: int
     # Silverbullet notes
     silverbullet_space_path: Path
-    # AI model names
+    # AI model names (kept for vision/voice/heartbeat display, not used by main agent)
     agent_model: str
-    memory_model: str
     vision_model: str
     # Reminder defaults
     default_reminder_offset_hours: float
@@ -42,7 +41,6 @@ class Settings:
     # MCP server commands
     mcp_server_commands: list[str]
     # Claude Agent SDK settings
-    agent_sdk_enabled: bool
     anthropic_base_url: str
     anthropic_api_key: str
 
@@ -57,8 +55,6 @@ class Settings:
             raise ValueError("TELEGRAM_USER_ID is required")
 
         openai_api_key = os.environ.get("OPENAI_API_KEY")
-        if not openai_api_key:
-            raise ValueError("OPENAI_API_KEY is required")
 
         google_credentials_path = Path(os.environ.get("GOOGLE_CREDENTIALS_PATH", "credentials/google_credentials.json"))
         google_token_path = Path(os.environ.get("GOOGLE_TOKEN_PATH", "credentials/google_token.json"))
@@ -78,8 +74,7 @@ class Settings:
 
         silverbullet_space_path = Path(os.environ.get("SILVERBULLET_SPACE_PATH", ""))
 
-        agent_model = os.environ.get("AGENT_MODEL", "gpt-5.2")
-        memory_model = os.environ.get("MEMORY_MODEL", "gpt-5-mini")
+        agent_model = os.environ.get("AGENT_MODEL", "claude-sonnet-4-5")
         vision_model = os.environ.get("VISION_MODEL", "gpt-5.2")
 
         default_reminder_offset_hours = float(os.environ.get("DEFAULT_REMINDER_OFFSET_HOURS", "1.0"))
@@ -89,7 +84,7 @@ class Settings:
 
         # Heartbeat settings
         heartbeat_interval_minutes = int(os.environ.get("HEARTBEAT_INTERVAL_MINUTES", "60"))
-        heartbeat_model = os.environ.get("HEARTBEAT_MODEL", "gpt-5-mini")
+        heartbeat_model = os.environ.get("HEARTBEAT_MODEL", "claude-haiku-3-5")
         heartbeat_enabled = os.environ.get("HEARTBEAT_ENABLED", "true").lower() == "true"
         heartbeat_max_notifications = int(os.environ.get("HEARTBEAT_MAX_NOTIFICATIONS", "3"))
 
@@ -98,7 +93,6 @@ class Settings:
         mcp_server_commands = [c.strip() for c in mcp_cmds.split(",") if c.strip()]
 
         # Claude Agent SDK settings
-        agent_sdk_enabled = os.environ.get("AGENT_SDK_ENABLED", "false").lower() == "true"
         anthropic_base_url = os.environ.get("ANTHROPIC_BASE_URL", "http://localhost:4000")
         anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
 
@@ -117,7 +111,6 @@ class Settings:
             web_session_ttl_days=web_session_ttl_days,
             silverbullet_space_path=silverbullet_space_path,
             agent_model=agent_model,
-            memory_model=memory_model,
             vision_model=vision_model,
             default_reminder_offset_hours=default_reminder_offset_hours,
             code_execution_timeout=code_execution_timeout,
@@ -126,7 +119,6 @@ class Settings:
             heartbeat_enabled=heartbeat_enabled,
             heartbeat_max_notifications=heartbeat_max_notifications,
             mcp_server_commands=mcp_server_commands,
-            agent_sdk_enabled=agent_sdk_enabled,
             anthropic_base_url=anthropic_base_url,
             anthropic_api_key=anthropic_api_key,
         )

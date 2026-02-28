@@ -1,10 +1,11 @@
 # MINION - Personal Assistant Bot
 
-Single-user personal assistant powered by an Agno agent (OpenAI GPT). Manages tasks, reminders, shopping lists, contacts/birthdays, calendar events, and Silverbullet notes. Accessible via Telegram bot and web dashboard (HTMX). Runs a FastAPI server alongside the optional Telegram polling loop. APScheduler handles proactive behaviors (morning summary, reminders, birthday nudges, calendar sync).
+Single-user personal assistant powered by the Claude Agent SDK via LiteLLM proxy (model-agnostic). Manages tasks, reminders, shopping lists, contacts/birthdays, calendar events, and Silverbullet notes. Accessible via Telegram bot and web dashboard (HTMX). Runs a FastAPI server alongside the optional Telegram polling loop. APScheduler handles proactive behaviors (morning summary, reminders, birthday nudges, calendar sync, heartbeat).
 
 ## Tech Stack
 - Python 3.11+ with `uv` for package management
-- Agno agent framework with configurable OpenAI models
+- Claude Agent SDK (`claude-agent-sdk`) — wraps Claude Code CLI, tools via in-process MCP server
+- LiteLLM proxy — Anthropic-compatible API translating to Gemini/GPT backends
 - SQLite via SQLAlchemy (declarative models)
 - python-telegram-bot for Telegram integration (optional — web-only mode supported)
 - FastAPI + Jinja2 + HTMX + Pico CSS for web dashboard
@@ -28,8 +29,9 @@ minion/
 │   ├── notifications.py      # Notification dispatcher (decouples scheduler from Telegram)
 │   ├── utils.py              # Shared helpers (date parsing, birthday calc)
 │   ├── agent/
-│   │   ├── agent.py          # Agent singleton, system prompt (format-aware), tool_logger_hook
-│   │   └── tools/            # ~55 tool functions (tasks, shopping, contacts, calendar, notes, profile, bookmarks, mood, scheduling)
+│   │   ├── sdk_agent.py      # Claude Agent SDK client, chat(), chat_stream(), system prompt
+│   │   ├── sdk_tools/        # SDK tool wrappers: make_sdk_tool(), auto-schema, MAIN_TOOLS/HEARTBEAT_TOOLS
+│   │   └── tools/            # ~76 tool implementation functions (tasks, shopping, contacts, calendar, notes, profile, bookmarks, mood, scheduling, memory)
 │   ├── telegram/
 │   │   ├── bot.py            # Message/voice/photo handlers, send_message, error notifications
 │   │   └── commands.py       # Slash command handlers (/tasks, /today, /auth, etc.)
@@ -78,7 +80,7 @@ minion/
 All Telegram handlers use the `@require_auth` decorator from `src/telegram/commands.py`. Never duplicate the `is_authorized()` check inline. The decorator returns early with "Not authorized." if the user doesn't match `settings.telegram_user_id`.
 
 ### AI Models: configurable via settings
-Model names live in `settings.agent_model`, `settings.memory_model`, `settings.vision_model` (default to `gpt-5.2`/`gpt-5-mini`/`gpt-5.2`). Override via `AGENT_MODEL`, `MEMORY_MODEL`, `VISION_MODEL` env vars. Never hardcode model strings in agent/vision code.
+Model names live in `settings.agent_model`, `settings.vision_model` (default to `claude-sonnet-4-5`/`gpt-5.2`). Override via `AGENT_MODEL`, `VISION_MODEL` env vars. LiteLLM proxy translates Anthropic model names to actual provider models. Never hardcode model strings in agent/vision code.
 
 ### Datetimes: always timezone-aware
 Use `datetime.now(timezone.utc)` everywhere. Model defaults use `default=lambda: datetime.now(timezone.utc)`. Never use `datetime.utcnow()` (deprecated).
@@ -132,9 +134,19 @@ When `TELEGRAM_BOT_TOKEN` is not set, the bot starts in web-only mode: no Telegr
 ### Google OAuth moved to /oauth/*
 OAuth routes moved from `/auth/start` to `/oauth/start`, `/auth/callback` to `/oauth/callback`. Legacy redirects in place for backwards compatibility.
 
+### Agent architecture: Claude Agent SDK + LiteLLM
+- `src/agent/sdk_agent.py` — creates `ClaudeSDKClient`, passes `ANTHROPIC_BASE_URL`/`ANTHROPIC_API_KEY` env vars pointing to LiteLLM proxy
+- Tools are plain Python functions in `src/agent/tools/`, wrapped via `make_sdk_tool()` in `src/agent/sdk_tools/__init__.py` and served as in-process MCP server
+- Format hints (Telegram HTML vs web Markdown) are injected into the system prompt, eliminating the old double-LLM-call formatter
+- Streaming: `chat_stream()` yields text chunks; Telegram uses placeholder+edit pattern, web uses SSE
+- Session persistence via `session_id` passed as `resume=` on subsequent calls
+- Heartbeat uses a separate short-lived `ClaudeSDKClient` with a subset of tools (`HEARTBEAT_TOOLS`)
+- Explicit memory: `AgentMemory` model (save/recall/list/forget) — agent is instructed to save preferences and facts
+
 ### Scheduler jobs
 Registered in `src/main.py:register_jobs()`. Current jobs:
-- Morning summary (10:30), EOD review (21:00 + mood prompt), Proactive intelligence (17:00 + mood trend)
+- Morning summary (10:30), EOD review (21:00 + mood prompt)
+- Heartbeat engine (configurable interval, default 60 min)
 - Reminder delivery (every 1 min), Calendar sync (every 30 min), Recurring tasks generation (every 5 min)
 - Web session cleanup (daily 3 AM)
 

@@ -1,4 +1,5 @@
 import logging
+import time as _time
 import uuid
 from datetime import datetime
 
@@ -11,7 +12,7 @@ from telegram.ext import (
     filters,
 )
 
-from src.agent import chat
+from src.agent import chat, chat_stream
 from src.config import settings
 from src.integrations.vision import extract_task_from_image
 from src.integrations.voice import transcribe_voice
@@ -90,11 +91,57 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         clear_command_context()
 
     try:
-        response = await chat(user_message)
-        await safe_reply(update.message, response)
+        # Use streaming if SDK is enabled and chat_stream is available
+        if chat_stream is not None:
+            await _handle_streaming_message(update, user_message)
+        else:
+            response = await chat(user_message)
+            await safe_reply(update.message, response)
     except Exception as e:
         logger.exception("Error processing message")
         await update.message.reply_text(f"Sorry, I encountered an error: {str(e)[:100]}")
+
+
+async def _handle_streaming_message(update: Update, user_message: str) -> None:
+    """Handle a message with streaming response (progressive edits)."""
+    placeholder = await update.message.reply_text("...")
+    accumulated = ""
+    last_edit = 0.0
+
+    try:
+        async for chunk in chat_stream(user_message):
+            accumulated += chunk
+            now = _time.time()
+            # Rate-limit edits to every 1.5 seconds to avoid Telegram API throttle
+            if now - last_edit >= 1.5 and len(accumulated) > 3:
+                try:
+                    # Show truncated text with "..." indicator while streaming
+                    display = accumulated[:4000] + " ..." if len(accumulated) > 4000 else accumulated + " ..."
+                    await placeholder.edit_text(display)
+                    last_edit = now
+                except BadRequest:
+                    pass  # Edit can fail if text is unchanged
+
+        # Final edit with the complete response
+        if accumulated.strip():
+            import contextlib
+
+            try:
+                await placeholder.edit_text(accumulated, parse_mode="HTML")
+            except BadRequest:
+                # HTML parse failed — try plain text
+                with contextlib.suppress(BadRequest):
+                    await placeholder.edit_text(accumulated)
+        else:
+            await placeholder.edit_text("Done.")
+    except Exception:
+        logger.exception("Streaming error, falling back to non-streaming")
+        # Fallback: use non-streaming chat
+        response = await chat(user_message)
+        try:
+            await placeholder.edit_text(response, parse_mode="HTML")
+        except BadRequest:
+            await placeholder.edit_text(response)
 
 
 @require_auth

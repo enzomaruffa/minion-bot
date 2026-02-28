@@ -189,7 +189,7 @@ def _build_recent_actions() -> str:
 
 
 def _create_heartbeat_agent() -> Agent:
-    """Create a lightweight agent for heartbeat runs."""
+    """Create a lightweight Agno agent for heartbeat runs."""
     return Agent(
         model=OpenAIChat(
             id=settings.heartbeat_model,
@@ -231,6 +231,50 @@ def _create_heartbeat_agent() -> Agent:
     )
 
 
+async def _run_heartbeat_sdk(prompt: str) -> str | None:
+    """Run a heartbeat cycle using the Claude Agent SDK."""
+    from claude_agent_sdk import (
+        AssistantMessage,
+        ClaudeAgentOptions,
+        ClaudeSDKClient,
+        ResultMessage,
+        TextBlock,
+        create_sdk_mcp_server,
+    )
+
+    from src.agent.sdk_tools import HEARTBEAT_TOOLS
+
+    heartbeat_server = create_sdk_mcp_server(
+        name="heartbeat-tools",
+        version="1.0.0",
+        tools=HEARTBEAT_TOOLS,
+    )
+
+    options = ClaudeAgentOptions(
+        system_prompt=prompt,
+        mcp_servers={"hb": heartbeat_server},
+        allowed_tools=[f"mcp__hb__{t.name}" for t in HEARTBEAT_TOOLS],
+        max_turns=15,
+        env={
+            "ANTHROPIC_BASE_URL": settings.anthropic_base_url,
+            "ANTHROPIC_API_KEY": settings.anthropic_api_key,
+        },
+    )
+
+    response_text = ""
+    async with ClaudeSDKClient(options=options) as client:
+        await client.query(prompt)
+        async for msg in client.receive_response():
+            if isinstance(msg, AssistantMessage):
+                for block in msg.content:
+                    if isinstance(block, TextBlock):
+                        response_text += block.text
+            elif isinstance(msg, ResultMessage):
+                break
+
+    return response_text or None
+
+
 async def run_heartbeat() -> None:
     """Run a single heartbeat cycle."""
     if not settings.heartbeat_enabled:
@@ -253,16 +297,19 @@ async def run_heartbeat() -> None:
             quiet_hours_note=quiet_hours_note,
         )
 
-        agent = _create_heartbeat_agent()
+        if settings.agent_sdk_enabled:
+            response_content = await _run_heartbeat_sdk(prompt)
+        else:
+            import asyncio
 
-        import asyncio
-
-        response = await asyncio.to_thread(
-            agent.run,
-            prompt,
-            user_id=str(settings.telegram_user_id),
-            session_id="heartbeat",
-        )
+            agent = _create_heartbeat_agent()
+            response = await asyncio.to_thread(
+                agent.run,
+                prompt,
+                user_id=str(settings.telegram_user_id),
+                session_id="heartbeat",
+            )
+            response_content = response.content
 
         # Mark checked interests as checked
         with session_scope() as session:
@@ -271,7 +318,7 @@ async def run_heartbeat() -> None:
             for interest in due:
                 mark_interest_checked(session, interest.id, now)
 
-        logger.info(f"Heartbeat complete: {response.content[:100] if response.content else '(no output)'}...")
+        logger.info(f"Heartbeat complete: {response_content[:100] if response_content else '(no output)'}...")
 
     except Exception as e:
         logger.exception(f"Heartbeat failed: {e}")

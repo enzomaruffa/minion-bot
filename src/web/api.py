@@ -774,3 +774,27 @@ async def api_chat(body: ChatRequest) -> ChatResponse:
 
     response = await chat(body.message, format_hint="web")
     return ChatResponse(response=response)
+
+
+@router.post("/chat/stream", dependencies=[Depends(get_current_user)])
+async def api_chat_stream(body: ChatRequest):
+    """Streaming chat endpoint — returns Server-Sent Events."""
+    import json
+
+    from fastapi.responses import StreamingResponse
+
+    from src.agent import chat_stream
+
+    async def event_generator():
+        if chat_stream is None:
+            # Fallback to non-streaming
+            from src.agent import chat
+
+            response = await chat(body.message, format_hint="web")
+            yield f"data: {json.dumps({'text': response})}\n\n"
+        else:
+            async for chunk in chat_stream(body.message, format_hint="web"):
+                yield f"data: {json.dumps({'text': chunk})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")

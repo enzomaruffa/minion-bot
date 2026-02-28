@@ -41,6 +41,10 @@ class Settings:
     heartbeat_max_notifications: int
     # MCP server commands
     mcp_server_commands: list[str]
+    # Claude Agent SDK settings
+    agent_sdk_enabled: bool
+    anthropic_base_url: str
+    anthropic_api_key: str
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -93,6 +97,11 @@ class Settings:
         mcp_cmds = os.environ.get("MCP_SERVER_COMMANDS", "")
         mcp_server_commands = [c.strip() for c in mcp_cmds.split(",") if c.strip()]
 
+        # Claude Agent SDK settings
+        agent_sdk_enabled = os.environ.get("AGENT_SDK_ENABLED", "false").lower() == "true"
+        anthropic_base_url = os.environ.get("ANTHROPIC_BASE_URL", "http://localhost:4000")
+        anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+
         return cls(
             telegram_bot_token=telegram_bot_token,
             telegram_user_id=int(telegram_user_id),
@@ -117,6 +126,9 @@ class Settings:
             heartbeat_enabled=heartbeat_enabled,
             heartbeat_max_notifications=heartbeat_max_notifications,
             mcp_server_commands=mcp_server_commands,
+            agent_sdk_enabled=agent_sdk_enabled,
+            anthropic_base_url=anthropic_base_url,
+            anthropic_api_key=anthropic_api_key,
         )
 
 

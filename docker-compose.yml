@@ -1,4 +1,17 @@
 services:
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    ports:
+      - "21126:4000"
+    volumes:
+      - ./litellm_config.yaml:/app/config.yaml
+    env_file:
+      - .env
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    restart: unless-stopped
+    environment:
+      - TZ=America/Sao_Paulo
+
   minion:
     build: .
     ports:
@@ -9,6 +22,10 @@ services:
       - /home/enzolitos/silverbullet-kit/space:/app/silverbullet:rw
     env_file:
       - .env
+    depends_on:
+      - litellm
     restart: unless-stopped
     environment:
       - TZ=America/Sao_Paulo
+      - ANTHROPIC_BASE_URL=http://litellm:4000
+      - ANTHROPIC_API_KEY=sk-litellm

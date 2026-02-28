@@ -1,22 +1,19 @@
 model_list:
-  # Map Anthropic model names to actual providers
+  # Map Anthropic model names to actual providers.
   # The Claude Agent SDK sends requests as if talking to Anthropic API,
   # LiteLLM translates to the actual provider.
 
-  # Gemini 3.1 Pro (primary)
+  # GPT-5.2 (primary agent model)
   - model_name: claude-sonnet-4-5
     litellm_params:
-      model: gemini/gemini-3.1-pro
-      api_key: os.environ/GOOGLE_API_KEY
+      model: openai/gpt-5.2
+      api_key: os.environ/OPENAI_API_KEY
 
-  # Cheaper model for heartbeat / lightweight tasks
+  # GPT-5-mini (heartbeat / lightweight tasks)
   - model_name: claude-haiku-3-5
     litellm_params:
-      model: gemini/gemini-3.1-flash
-      api_key: os.environ/GOOGLE_API_KEY
-
-general_settings:
-  master_key: os.environ/LITELLM_MASTER_KEY
+      model: openai/gpt-5-mini
+      api_key: os.environ/OPENAI_API_KEY
 
 litellm_settings:
   drop_params: true  # Silently drop unsupported params for cross-provider compat

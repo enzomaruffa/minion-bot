@@ -227,6 +227,7 @@ async def _run_heartbeat_sdk(prompt: str) -> str | None:
         mcp_servers={"hb": heartbeat_server},
         allowed_tools=[f"mcp__hb__{t.name}" for t in HEARTBEAT_TOOLS],
         agents=SUBAGENTS,
+        permission_mode="bypassPermissions",
         max_turns=15,
         env={
             "ANTHROPIC_BASE_URL": settings.anthropic_base_url,

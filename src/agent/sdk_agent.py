@@ -282,6 +282,7 @@ async def chat(message: str, format_hint: str = "telegram") -> str:
         mcp_servers=mcp_servers,
         allowed_tools=_build_allowed_tools(),
         agents=SUBAGENTS,
+        permission_mode="bypassPermissions",
         max_turns=20,
         env={
             "ANTHROPIC_BASE_URL": settings.anthropic_base_url,
@@ -348,6 +349,7 @@ async def chat_stream(message: str, format_hint: str = "telegram"):
         mcp_servers=mcp_servers,
         allowed_tools=_build_allowed_tools(),
         agents=SUBAGENTS,
+        permission_mode="bypassPermissions",
         max_turns=20,
         env={
             "ANTHROPIC_BASE_URL": settings.anthropic_base_url,

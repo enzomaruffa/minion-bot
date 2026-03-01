@@ -146,22 +146,35 @@ async def _handle_streaming_message(update: Update, user_message: str) -> None:
         elif accumulated.strip():
             import contextlib
 
-            try:
-                await placeholder.edit_text(accumulated, parse_mode="HTML")
-            except BadRequest:
-                # HTML parse failed — try plain text
-                with contextlib.suppress(BadRequest):
-                    await placeholder.edit_text(accumulated)
+            if len(accumulated) > 4096:
+                # Too long for a single edit — delete placeholder and chunk-send
+                with contextlib.suppress(Exception):
+                    await placeholder.delete()
+                await safe_reply(update.message, accumulated)
+            else:
+                try:
+                    await placeholder.edit_text(accumulated, parse_mode="HTML")
+                except BadRequest:
+                    # HTML parse failed — try plain text
+                    with contextlib.suppress(BadRequest):
+                        await placeholder.edit_text(accumulated)
         else:
             await placeholder.edit_text("Done.")
     except Exception:
         logger.exception("Streaming error, falling back to non-streaming")
         response = await chat(user_message)
         if placeholder:
-            try:
-                await placeholder.edit_text(response, parse_mode="HTML")
-            except BadRequest:
-                await placeholder.edit_text(response)
+            import contextlib
+
+            if len(response) > 4096:
+                with contextlib.suppress(Exception):
+                    await placeholder.delete()
+                await safe_reply(update.message, response)
+            else:
+                try:
+                    await placeholder.edit_text(response, parse_mode="HTML")
+                except BadRequest:
+                    await placeholder.edit_text(response)
         else:
             await safe_reply(update.message, response)
 

@@ -11,6 +11,7 @@ from src.db.queries import (
     list_completed_recurring_tasks,
     list_pending_reminders,
     list_tasks_by_status,
+    log_agent_event,
     mark_reminder_delivered,
 )
 from src.notifications import notify
@@ -28,6 +29,13 @@ async def morning_summary() -> None:
         message = f"Good morning! Here's your agenda for today:\n\n{agenda}"
         await notify(message)
         logger.info("Morning summary sent")
+
+        # Log to event bus
+        try:
+            with session_scope() as session:
+                log_agent_event(session, "scheduler", "job_ran", f"Morning summary sent: {message[:200]}")
+        except Exception:
+            logger.debug("Failed to log morning summary to event bus", exc_info=True)
     except Exception as e:
         logger.exception(f"Error sending morning summary: {e}")
 
@@ -89,8 +97,16 @@ async def eod_review() -> None:
                 lines.append("")
                 lines.append("How was your day? Rate 1-5 (😞😕😐🙂😄)")
 
-        await notify("\n".join(lines))
+        eod_message = "\n".join(lines)
+        await notify(eod_message)
         logger.info("EOD review sent")
+
+        # Log to event bus
+        try:
+            with session_scope() as session:
+                log_agent_event(session, "scheduler", "job_ran", f"EOD review sent: {eod_message[:200]}")
+        except Exception:
+            logger.debug("Failed to log EOD review to event bus", exc_info=True)
     except Exception as e:
         logger.exception(f"Error sending EOD review: {e}")
 

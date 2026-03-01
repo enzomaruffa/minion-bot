@@ -22,6 +22,8 @@ from claude_agent_sdk import (
 
 from src.agent.sdk_tools import MAIN_TOOLS
 from src.config import settings
+from src.db import session_scope
+from src.db.queries import log_agent_event
 
 logger = logging.getLogger(__name__)
 
@@ -272,6 +274,13 @@ async def chat(message: str, format_hint: str = "telegram") -> str:
 
     if not response_text.strip():
         response_text = "Done."
+
+    # Log to event bus
+    try:
+        with session_scope() as session:
+            log_agent_event(session, "chat", "agent_response", response_text[:500])
+    except Exception:
+        logger.debug("Failed to log agent response to event bus", exc_info=True)
 
     logger.info(f"Chat output: {response_text[:100]}{'...' if len(response_text) > 100 else ''}")
     return response_text

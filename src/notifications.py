@@ -4,6 +4,9 @@ import logging
 from collections.abc import Callable, Coroutine
 from typing import Any
 
+from src.db import session_scope
+from src.db.queries import log_agent_event
+
 logger = logging.getLogger(__name__)
 
 NotificationHandler = Callable[[str, str], Coroutine[Any, Any, None]]
@@ -24,3 +27,10 @@ async def notify(message: str, parse_mode: str = "HTML") -> None:
             await handler(message, parse_mode)
         except Exception:
             logger.exception(f"Notification handler {handler.__qualname__} failed")
+
+    # Log to event bus
+    try:
+        with session_scope() as session:
+            log_agent_event(session, "notification", "notification_sent", message[:500])
+    except Exception:
+        logger.debug("Failed to log notification to event bus", exc_info=True)

@@ -14,6 +14,8 @@ from telegram.ext import (
 
 from src.agent import chat, chat_stream
 from src.config import settings
+from src.db import session_scope
+from src.db.queries import log_agent_event
 from src.integrations.vision import extract_task_from_image
 from src.integrations.voice import transcribe_voice
 from src.telegram.commands import (
@@ -83,6 +85,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     user_message = update.message.text
     logger.info(f"Received message: {user_message[:50]}...")
+
+    # Log to event bus
+    try:
+        with session_scope() as session:
+            log_agent_event(session, "user", "user_message", user_message[:500])
+    except Exception:
+        logger.debug("Failed to log user message to event bus", exc_info=True)
 
     # Inject last command context if recent
     cmd_context = get_last_command_context()

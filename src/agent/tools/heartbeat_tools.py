@@ -12,6 +12,7 @@ from src.db.queries import (
     create_heartbeat_log,
     get_interest,
     get_user_profile,
+    log_agent_event,
 )
 from src.notifications import notify
 
@@ -106,7 +107,24 @@ def log_heartbeat_action(
             interest_id=interest_id,
             notified=notified,
         )
-        return f"Logged heartbeat action: {action_type} ({dedup_key})"
+
+    # Also log to shared event bus
+    try:
+        metadata = {"dedup_key": dedup_key}
+        if interest_id:
+            metadata["interest_id"] = interest_id
+        with session_scope() as session:
+            log_agent_event(
+                session,
+                source="heartbeat",
+                event_type=action_type,
+                summary=summary,
+                metadata=metadata,
+            )
+    except Exception:
+        logger.debug("Failed to log heartbeat action to event bus", exc_info=True)
+
+    return f"Logged heartbeat action: {action_type} ({dedup_key})"
 
 
 def send_proactive_notification(message: str) -> str:

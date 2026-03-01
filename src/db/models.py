@@ -17,6 +17,12 @@ class TaskStatus(StrEnum):
     CANCELLED = "cancelled"
 
 
+class AgentWorkStatus(StrEnum):
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 class TaskPriority(StrEnum):
     LOW = "low"
     MEDIUM = "medium"
@@ -300,3 +306,33 @@ class UserCalendarToken(Base):
     expiry: Mapped[datetime | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+
+
+class AgentEvent(Base):
+    """Shared event bus — all agents write here, all agents read for context."""
+
+    __tablename__ = "agent_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    timestamp: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC), index=True)
+    source: Mapped[str] = mapped_column(String(50))  # chat, heartbeat, scheduler, notification, subagent
+    event_type: Mapped[str] = mapped_column(String(50))  # notification_sent, user_message, agent_response, etc.
+    summary: Mapped[str] = mapped_column(Text)
+    metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON blob
+
+
+class AgentWork(Base):
+    """Mutable tracker for in-progress subagent work."""
+
+    __tablename__ = "agent_work"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    agent_name: Mapped[str] = mapped_column(String(50))  # researcher, planner, etc.
+    description: Mapped[str] = mapped_column(Text)
+    status: Mapped[AgentWorkStatus] = mapped_column(default=AgentWorkStatus.IN_PROGRESS)
+    progress_log: Mapped[str] = mapped_column(Text, default="")
+    result: Mapped[str | None] = mapped_column(Text, nullable=True)
+    related_task_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id"), nullable=True)
+    triggered_by: Mapped[str] = mapped_column(String(50))  # chat, heartbeat
+    started_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(UTC))
+    completed_at: Mapped[datetime | None] = mapped_column(nullable=True)

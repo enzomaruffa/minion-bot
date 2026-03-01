@@ -23,6 +23,18 @@ logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
+def _cleanup_event_bus() -> None:
+    """Clean up old events and completed work from the event bus."""
+    from src.db import session_scope
+    from src.db.queries import cleanup_old_events, cleanup_old_work
+
+    with session_scope() as session:
+        events_deleted = cleanup_old_events(session, older_than_days=7)
+        work_deleted = cleanup_old_work(session, older_than_days=3)
+        if events_deleted or work_deleted:
+            logger.info(f"Event bus cleanup: {events_deleted} events, {work_deleted} work items deleted")
+
+
 def register_jobs() -> None:
     """Register scheduled jobs (must be called before start)."""
     # Morning summary at 10:30 AM
@@ -50,6 +62,9 @@ def register_jobs() -> None:
     from src.web.auth import cleanup_expired_sessions_job
 
     add_cron_job(cleanup_expired_sessions_job, hour=3, minute=0, job_id="session_cleanup")
+
+    # Event bus + agent work cleanup daily at 4 AM
+    add_cron_job(_cleanup_event_bus, hour=4, minute=0, job_id="event_bus_cleanup")
 
 
 async def _init_mcp_and_agent() -> None:

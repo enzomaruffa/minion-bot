@@ -6,7 +6,10 @@ from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql import Select
 
 from .models import (
+    AgentEvent,
     AgentMemory,
+    AgentWork,
+    AgentWorkStatus,
     Attachment,
     Bookmark,
     CalendarEvent,
@@ -1416,3 +1419,155 @@ def delete_agent_memory(session: Session, key: str) -> bool:
     result = session.execute(delete(AgentMemory).where(AgentMemory.key == key))
     session.flush()
     return result.rowcount > 0
+
+
+# ============================================================================
+# Event Bus Queries
+# ============================================================================
+
+
+def log_agent_event(
+    session: Session,
+    source: str,
+    event_type: str,
+    summary: str,
+    metadata: dict | None = None,
+) -> AgentEvent:
+    """Log an event to the shared event bus."""
+    import json
+
+    event = AgentEvent(
+        source=source,
+        event_type=event_type,
+        summary=summary,
+        metadata_json=json.dumps(metadata) if metadata else None,
+    )
+    session.add(event)
+    session.flush()
+    return event
+
+
+def get_recent_events(
+    session: Session, limit: int = 30, since_hours: int = 24
+) -> Sequence[AgentEvent]:
+    """Get recent events from the bus for system prompt injection."""
+    cutoff = datetime.now(UTC) - timedelta(hours=since_hours)
+    stmt = (
+        select(AgentEvent)
+        .where(AgentEvent.timestamp >= cutoff)
+        .order_by(AgentEvent.timestamp.desc())
+        .limit(limit)
+    )
+    return session.scalars(stmt).all()
+
+
+def get_events_by_source(session: Session, source: str, limit: int = 10) -> Sequence[AgentEvent]:
+    """Get events from a specific source."""
+    stmt = (
+        select(AgentEvent)
+        .where(AgentEvent.source == source)
+        .order_by(AgentEvent.timestamp.desc())
+        .limit(limit)
+    )
+    return session.scalars(stmt).all()
+
+
+def cleanup_old_events(session: Session, older_than_days: int = 7) -> int:
+    """Delete events older than N days. Returns count deleted."""
+    cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
+    result = session.execute(delete(AgentEvent).where(AgentEvent.timestamp < cutoff))
+    session.flush()
+    return result.rowcount
+
+
+# ============================================================================
+# Agent Work Queries
+# ============================================================================
+
+
+def start_agent_work(
+    session: Session,
+    agent_name: str,
+    description: str,
+    triggered_by: str,
+    related_task_id: int | None = None,
+) -> AgentWork:
+    """Create a new in-progress work item."""
+    work = AgentWork(
+        agent_name=agent_name,
+        description=description,
+        triggered_by=triggered_by,
+        related_task_id=related_task_id,
+    )
+    session.add(work)
+    session.flush()
+    session.refresh(work)
+    return work
+
+
+def update_work_progress(session: Session, work_id: int, progress_text: str) -> AgentWork | None:
+    """Append progress text to a work item's log."""
+    work = session.get(AgentWork, work_id)
+    if not work:
+        return None
+    work.progress_log += f"\n{progress_text}" if work.progress_log else progress_text
+    session.flush()
+    return work
+
+
+def complete_agent_work(session: Session, work_id: int, result: str) -> AgentWork | None:
+    """Mark work as completed with a result."""
+    work = session.get(AgentWork, work_id)
+    if not work:
+        return None
+    work.status = AgentWorkStatus.COMPLETED
+    work.result = result
+    work.completed_at = datetime.now(UTC)
+    session.flush()
+    return work
+
+
+def fail_agent_work(session: Session, work_id: int, error: str) -> AgentWork | None:
+    """Mark work as failed with an error."""
+    work = session.get(AgentWork, work_id)
+    if not work:
+        return None
+    work.status = AgentWorkStatus.FAILED
+    work.result = error
+    work.completed_at = datetime.now(UTC)
+    session.flush()
+    return work
+
+
+def get_active_work(session: Session) -> Sequence[AgentWork]:
+    """Get all in-progress work items."""
+    stmt = (
+        select(AgentWork)
+        .where(AgentWork.status == AgentWorkStatus.IN_PROGRESS)
+        .order_by(AgentWork.started_at.desc())
+    )
+    return session.scalars(stmt).all()
+
+
+def get_recent_completed_work(session: Session, hours: int = 24) -> Sequence[AgentWork]:
+    """Get recently completed work items."""
+    cutoff = datetime.now(UTC) - timedelta(hours=hours)
+    stmt = (
+        select(AgentWork)
+        .where(AgentWork.status == AgentWorkStatus.COMPLETED)
+        .where(AgentWork.completed_at >= cutoff)
+        .order_by(AgentWork.completed_at.desc())
+    )
+    return session.scalars(stmt).all()
+
+
+def cleanup_old_work(session: Session, older_than_days: int = 3) -> int:
+    """Delete completed/failed work older than N days. Returns count deleted."""
+    cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
+    result = session.execute(
+        delete(AgentWork)
+        .where(AgentWork.status != AgentWorkStatus.IN_PROGRESS)
+        .where(AgentWork.completed_at < cutoff)
+    )
+    session.flush()
+    return result.rowcount

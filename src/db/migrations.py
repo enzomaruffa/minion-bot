@@ -582,3 +582,51 @@ MIGRATIONS.append(
         _016_agent_memories,
     )
 )
+
+
+# ── Migration 017: Event bus + agent work tables ──────────────────────────
+
+
+def _017_agent_event_bus(session: Session) -> None:
+    """Create agent_events and agent_work tables for multi-agent event bus."""
+    session.execute(
+        text("""
+        CREATE TABLE IF NOT EXISTS agent_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+            source VARCHAR(50) NOT NULL,
+            event_type VARCHAR(50) NOT NULL,
+            summary TEXT NOT NULL,
+            metadata_json TEXT
+        )
+    """)
+    )
+    session.execute(text("CREATE INDEX IF NOT EXISTS ix_agent_events_timestamp ON agent_events (timestamp)"))
+
+    session.execute(
+        text("""
+        CREATE TABLE IF NOT EXISTS agent_work (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_name VARCHAR(50) NOT NULL,
+            description TEXT NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'in_progress',
+            progress_log TEXT NOT NULL DEFAULT '',
+            result TEXT,
+            related_task_id INTEGER REFERENCES tasks(id),
+            triggered_by VARCHAR(50) NOT NULL,
+            started_at TEXT NOT NULL DEFAULT (datetime('now')),
+            completed_at TEXT
+        )
+    """)
+    )
+    session.flush()
+    logger.info("Created agent_events and agent_work tables")
+
+
+MIGRATIONS.append(
+    (
+        "017_agent_event_bus",
+        "Create agent_events and agent_work tables for multi-agent event bus",
+        _017_agent_event_bus,
+    )
+)

@@ -305,10 +305,7 @@ async def chat(message: str, format_hint: str = "telegram") -> str:
                             response_text += block.text
                 elif isinstance(msg, ResultMessage):
                     _session_id = msg.session_id
-                    logger.info(
-                        f"Session {_session_id}: {msg.num_turns} turns, "
-                        f"${msg.total_cost_usd:.4f}"
-                    )
+                    logger.info(f"Session {_session_id}: {msg.num_turns} turns, ${msg.total_cost_usd:.4f}")
                     break
     except Exception as e:
         logger.exception(f"SDK agent error: {e}")

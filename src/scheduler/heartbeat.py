@@ -112,7 +112,7 @@ def _build_context() -> str:
         if overdue:
             lines.append(f"\nOverdue tasks ({len(overdue)}):")
             for t in overdue[:5]:
-                days = (now_naive - t.due_date).days
+                days = (now_naive - t.due_date).days if t.due_date else 0
                 lines.append(f"  #{t.id}: {t.title} ({days}d overdue)")
 
         # Due soon
@@ -120,7 +120,7 @@ def _build_context() -> str:
         if due_soon:
             lines.append(f"\nDue within 24h ({len(due_soon)}):")
             for t in due_soon[:5]:
-                hours = (t.due_date - now_naive).total_seconds() / 3600
+                hours = (t.due_date - now_naive).total_seconds() / 3600 if t.due_date else 0
                 lines.append(f"  #{t.id}: {t.title} (in {hours:.0f}h)")
 
         # In-progress tasks

@@ -17,7 +17,7 @@ _handlers: list[NotificationHandler] = []
 def register_handler(fn: NotificationHandler) -> None:
     """Register a notification handler (e.g. Telegram send_message)."""
     _handlers.append(fn)
-    logger.info(f"Registered notification handler: {fn.__qualname__}")
+    logger.info(f"Registered notification handler: {getattr(fn, '__qualname__', repr(fn))}")
 
 
 async def notify(message: str, parse_mode: str = "HTML") -> None:
@@ -26,7 +26,7 @@ async def notify(message: str, parse_mode: str = "HTML") -> None:
         try:
             await handler(message, parse_mode)
         except Exception:
-            logger.exception(f"Notification handler {handler.__qualname__} failed")
+            logger.exception(f"Notification handler {getattr(handler, '__qualname__', repr(handler))} failed")
 
     # Log to event bus
     try:

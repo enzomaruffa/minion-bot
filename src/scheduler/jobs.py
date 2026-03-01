@@ -171,6 +171,8 @@ async def generate_recurring_tasks() -> None:
             generated = 0
 
             for task in tasks:
+                if not task.recurrence_rule:
+                    continue
                 after = task.due_date or task.updated_at or datetime.now(settings.timezone).replace(tzinfo=None)
                 next_due = _get_next_occurrence(task.recurrence_rule, after)
 

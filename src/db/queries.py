@@ -1,9 +1,13 @@
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.sql import Select
+
+if TYPE_CHECKING:
+    from sqlalchemy.engine import CursorResult
 
 from .models import (
     AgentEvent,
@@ -260,7 +264,7 @@ def move_all_tasks_between_projects(session: Session, from_project_id: int, to_p
     from sqlalchemy import update
 
     stmt = update(Task).where(Task.user_project_id == from_project_id).values(user_project_id=to_project_id)
-    result = session.execute(stmt)
+    result = cast("CursorResult[Any]", session.execute(stmt))
     session.flush()
     return result.rowcount
 
@@ -524,7 +528,7 @@ def delete_auto_reminders_for_task(session: Session, task_id: int) -> int:
         .where(Reminder.auto_created == True)
         .where(Reminder.delivered == False)
     )
-    result = session.execute(stmt)
+    result = cast("CursorResult[Any]", session.execute(stmt))
     session.flush()
     return result.rowcount
 
@@ -748,7 +752,7 @@ def clear_checked_items(session: Session, list_type: ShoppingListType | None = N
             stmt = stmt.where(ShoppingItem.list_id == shopping_list.id)
         else:
             return 0
-    result = session.execute(stmt)
+    result = cast("CursorResult[Any]", session.execute(stmt))
     session.flush()
     return result.rowcount
 
@@ -862,6 +866,8 @@ def list_upcoming_birthdays(session: Session, within_days: int = 14) -> Sequence
     upcoming = []
 
     for contact in contacts:
+        if not contact.birthday:
+            continue
         d = days_until_birthday(contact.birthday, today)
         if 0 <= d <= within_days:
             upcoming.append((contact, d))
@@ -1028,9 +1034,7 @@ def list_completed_recurring_tasks(session: Session) -> Sequence[Task]:
     result = []
     for task in tasks:
         successor = session.scalars(
-            select(Task)
-            .where(Task.recurrence_source_id == task.id)
-            .where(Task.status != TaskStatus.CANCELLED)
+            select(Task).where(Task.recurrence_source_id == task.id).where(Task.status != TaskStatus.CANCELLED)
         ).first()
         if not successor:
             result.append(task)
@@ -1245,7 +1249,7 @@ def cleanup_expired_sessions(session: Session) -> int:
     from sqlalchemy import delete as sa_delete
 
     stmt = sa_delete(WebSession).where(WebSession.expires_at <= datetime.now(UTC))
-    result = session.execute(stmt)
+    result = cast("CursorResult[Any]", session.execute(stmt))
     session.flush()
     return result.rowcount
 
@@ -1404,9 +1408,7 @@ def search_agent_memories(session: Session, query: str, limit: int = 10) -> Sequ
     return session.scalars(stmt).all()
 
 
-def list_agent_memories(
-    session: Session, limit: int = 20, category: str | None = None
-) -> Sequence[AgentMemory]:
+def list_agent_memories(session: Session, limit: int = 20, category: str | None = None) -> Sequence[AgentMemory]:
     """List recent memories, optionally filtered by category."""
     stmt = select(AgentMemory).order_by(AgentMemory.updated_at.desc()).limit(limit)
     if category:
@@ -1416,7 +1418,7 @@ def list_agent_memories(
 
 def delete_agent_memory(session: Session, key: str) -> bool:
     """Delete a memory by key. Returns True if found and deleted."""
-    result = session.execute(delete(AgentMemory).where(AgentMemory.key == key))
+    result = cast("CursorResult[Any]", session.execute(delete(AgentMemory).where(AgentMemory.key == key)))
     session.flush()
     return result.rowcount > 0
 
@@ -1447,35 +1449,23 @@ def log_agent_event(
     return event
 
 
-def get_recent_events(
-    session: Session, limit: int = 30, since_hours: int = 24
-) -> Sequence[AgentEvent]:
+def get_recent_events(session: Session, limit: int = 30, since_hours: int = 24) -> Sequence[AgentEvent]:
     """Get recent events from the bus for system prompt injection."""
     cutoff = datetime.now(UTC) - timedelta(hours=since_hours)
-    stmt = (
-        select(AgentEvent)
-        .where(AgentEvent.timestamp >= cutoff)
-        .order_by(AgentEvent.timestamp.desc())
-        .limit(limit)
-    )
+    stmt = select(AgentEvent).where(AgentEvent.timestamp >= cutoff).order_by(AgentEvent.timestamp.desc()).limit(limit)
     return session.scalars(stmt).all()
 
 
 def get_events_by_source(session: Session, source: str, limit: int = 10) -> Sequence[AgentEvent]:
     """Get events from a specific source."""
-    stmt = (
-        select(AgentEvent)
-        .where(AgentEvent.source == source)
-        .order_by(AgentEvent.timestamp.desc())
-        .limit(limit)
-    )
+    stmt = select(AgentEvent).where(AgentEvent.source == source).order_by(AgentEvent.timestamp.desc()).limit(limit)
     return session.scalars(stmt).all()
 
 
 def cleanup_old_events(session: Session, older_than_days: int = 7) -> int:
     """Delete events older than N days. Returns count deleted."""
     cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
-    result = session.execute(delete(AgentEvent).where(AgentEvent.timestamp < cutoff))
+    result = cast("CursorResult[Any]", session.execute(delete(AgentEvent).where(AgentEvent.timestamp < cutoff)))
     session.flush()
     return result.rowcount
 
@@ -1542,9 +1532,7 @@ def fail_agent_work(session: Session, work_id: int, error: str) -> AgentWork | N
 def get_active_work(session: Session) -> Sequence[AgentWork]:
     """Get all in-progress work items."""
     stmt = (
-        select(AgentWork)
-        .where(AgentWork.status == AgentWorkStatus.IN_PROGRESS)
-        .order_by(AgentWork.started_at.desc())
+        select(AgentWork).where(AgentWork.status == AgentWorkStatus.IN_PROGRESS).order_by(AgentWork.started_at.desc())
     )
     return session.scalars(stmt).all()
 
@@ -1564,10 +1552,13 @@ def get_recent_completed_work(session: Session, hours: int = 24) -> Sequence[Age
 def cleanup_old_work(session: Session, older_than_days: int = 3) -> int:
     """Delete completed/failed work older than N days. Returns count deleted."""
     cutoff = datetime.now(UTC) - timedelta(days=older_than_days)
-    result = session.execute(
-        delete(AgentWork)
-        .where(AgentWork.status != AgentWorkStatus.IN_PROGRESS)
-        .where(AgentWork.completed_at < cutoff)
+    result = cast(
+        "CursorResult[Any]",
+        session.execute(
+            delete(AgentWork)
+            .where(AgentWork.status != AgentWorkStatus.IN_PROGRESS)
+            .where(AgentWork.completed_at < cutoff)
+        ),
     )
     session.flush()
     return result.rowcount

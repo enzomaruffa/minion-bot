@@ -430,11 +430,11 @@ def _014_dedup_recurring_tasks(session: Session) -> None:
     ).fetchall()
 
     groups: dict[tuple[str, str], list[int]] = defaultdict(list)
-    for task_id, title, rule, due_date in rows:
+    for task_id, title, rule, _due_date in rows:
         groups[(title, rule)].append(task_id)
 
     deleted = 0
-    for key, ids in groups.items():
+    for _key, ids in groups.items():
         if len(ids) <= 1:
             continue
         # ids[0] has the latest due_date (ORDER BY ... DESC), keep it
@@ -505,7 +505,7 @@ def _015_dedup_recurring_tasks_v2(session: Session) -> None:
         groups[(row[1], row[2])].append(row[0])
 
     deleted = 0
-    for key, ids in groups.items():
+    for _key, ids in groups.items():
         if len(ids) <= 1:
             continue
         to_delete = ids[1:]

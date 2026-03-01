@@ -399,22 +399,27 @@ MAIN_TOOLS: list[Any] = [sdk_add_tasks, sdk_assign_tasks_to_project, *_auto_main
 # Tools given to the heartbeat agent (subset of main + heartbeat-specific)
 HEARTBEAT_TOOLS: list[Any] = [
     # From main tools - context/read tools
-    *[t for t in _auto_main if t.name in {
-        "get_current_datetime",
-        "get_agenda",
-        "get_overdue_tasks",
-        "list_tasks",
-        "get_weather",
-        "show_mood_history",
-        "list_interests",
-        "web_search",
-        "fetch_url",
-        "run_python_code",
-        "run_shell_command",
-        "beads_create",
-        "beads_list",
-        "beads_ready",
-    }],
+    *[
+        t
+        for t in _auto_main
+        if t.name
+        in {
+            "get_current_datetime",
+            "get_agenda",
+            "get_overdue_tasks",
+            "list_tasks",
+            "get_weather",
+            "show_mood_history",
+            "list_interests",
+            "web_search",
+            "fetch_url",
+            "run_python_code",
+            "run_shell_command",
+            "beads_create",
+            "beads_list",
+            "beads_ready",
+        }
+    ],
     # Heartbeat-specific tools
     *_auto_heartbeat,
 ]

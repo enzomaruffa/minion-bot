@@ -185,7 +185,7 @@ async def update_task_view(request: Request, task_id: int):
     if "priority" in form and form["priority"]:
         kwargs["priority"] = TaskPriority(form["priority"])
     if "due_date" in form and form["due_date"]:
-        kwargs["due_date"] = datetime.fromisoformat(form["due_date"])
+        kwargs["due_date"] = datetime.fromisoformat(str(form["due_date"]))
 
     with session_scope() as session:
         update_task(session, task_id, **kwargs)
@@ -465,15 +465,15 @@ async def update_interest_view(request: Request, interest_id: int):
     form = await request.form()
     kwargs = {}
     if "active" in form:
-        kwargs["active"] = form["active"].lower() == "true"
+        kwargs["active"] = str(form["active"]).lower() == "true"
     if "topic" in form and form["topic"]:
         kwargs["topic"] = form["topic"]
     if "description" in form:
         kwargs["description"] = form["description"] or None
     if "priority" in form and form["priority"]:
-        kwargs["priority"] = int(form["priority"])
+        kwargs["priority"] = int(str(form["priority"]))
     if "check_interval_hours" in form and form["check_interval_hours"]:
-        kwargs["check_interval_hours"] = int(form["check_interval_hours"])
+        kwargs["check_interval_hours"] = int(str(form["check_interval_hours"]))
 
     with session_scope() as session:
         i = update_interest(session, interest_id, **kwargs)
@@ -519,7 +519,7 @@ async def update_settings_view(request: Request):
             fields[key] = form[key]
     for key in ["work_start_hour", "work_end_hour"]:
         if key in form and form[key]:
-            fields[key] = int(form[key])
+            fields[key] = int(str(form[key]))
 
     # Geocode city if changed
     if "city" in fields:

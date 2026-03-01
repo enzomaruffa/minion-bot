@@ -51,6 +51,7 @@ def require_auth(func: Callable) -> Callable:
 @require_auth
 async def tasks_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /tasks command - list pending tasks."""
+    assert update.message  # guaranteed by @require_auth
     in_progress = list_tasks(status="in_progress")
     todo = list_tasks(status="todo")
 
@@ -76,6 +77,7 @@ async def tasks_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 @require_auth
 async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /today command - show today's agenda."""
+    assert update.message  # guaranteed by @require_auth
     today_str = datetime.now(settings.timezone).strftime("%A, %b %d")
     result = get_agenda()
 
@@ -87,6 +89,7 @@ async def today_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 @require_auth
 async def calendar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /calendar command - show upcoming calendar events."""
+    assert update.message  # guaranteed by @require_auth
     with session_scope() as session:
         now = datetime.now(settings.timezone).replace(tzinfo=None)
         end = now + timedelta(days=7)
@@ -171,6 +174,7 @@ def _store_command_context(command: str, output: str) -> None:
 @require_auth
 async def contacts_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /contacts command - list all contacts."""
+    assert update.message  # guaranteed by @require_auth
     with session_scope() as session:
         contacts = list_contacts(session)
 
@@ -190,6 +194,7 @@ async def contacts_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 @require_auth
 async def birthdays_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /birthdays command - show upcoming birthdays."""
+    assert update.message  # guaranteed by @require_auth
     with session_scope() as session:
         contacts = list_upcoming_birthdays(session, within_days=30)
 
@@ -253,6 +258,7 @@ def _format_shopping_list(items, list_type: ShoppingListType, title: str) -> str
 @require_auth
 async def groceries_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /groceries command - show groceries list."""
+    assert update.message  # guaranteed by @require_auth
     with session_scope() as session:
         items = list_shopping_items(session, ShoppingListType.GROCERIES, include_checked=True)
         output = _format_shopping_list(items, ShoppingListType.GROCERIES, "Groceries")
@@ -264,6 +270,7 @@ async def groceries_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 @require_auth
 async def gifts_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /gifts command - show gifts list."""
+    assert update.message  # guaranteed by @require_auth
     with session_scope() as session:
         items = list_shopping_items(session, ShoppingListType.GIFTS, include_checked=True)
         output = _format_shopping_list(items, ShoppingListType.GIFTS, "Gift Ideas")
@@ -275,6 +282,7 @@ async def gifts_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 @require_auth
 async def wishlist_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /wishlist command - show wishlist."""
+    assert update.message  # guaranteed by @require_auth
     with session_scope() as session:
         items = list_shopping_items(session, ShoppingListType.WISHLIST, include_checked=True)
         output = _format_shopping_list(items, ShoppingListType.WISHLIST, "Wishlist")
@@ -286,6 +294,7 @@ async def wishlist_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 @require_auth
 async def lists_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /lists command - show all shopping lists."""
+    assert update.message  # guaranteed by @require_auth
     with session_scope() as session:
         all_items = list_shopping_items(session, include_checked=True)
 
@@ -305,6 +314,7 @@ async def lists_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 @require_auth
 async def projects_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /projects command - show all user projects."""
+    assert update.message  # guaranteed by @require_auth
     output = list_projects_tool()
     _store_command_context("/projects", output)
     await update.message.reply_text(output)
@@ -313,6 +323,7 @@ async def projects_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 @require_auth
 async def reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /reminders command - show pending reminders."""
+    assert update.message  # guaranteed by @require_auth
     output = list_reminders()
     _store_command_context("/reminders", output)
     await update.message.reply_text(output)
@@ -321,6 +332,7 @@ async def reminders_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 @require_auth
 async def me_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /me command - show user profile."""
+    assert update.message  # guaranteed by @require_auth
     output = show_profile()
     _store_command_context("/me", output)
     await update.message.reply_text(output, parse_mode="HTML")
@@ -329,6 +341,7 @@ async def me_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 @require_auth
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /help command - show available commands."""
+    assert update.message  # guaranteed by @require_auth
     calendar_status = "connected" if is_calendar_connected() else "not connected (/auth)"
 
     help_text = f"""Commands

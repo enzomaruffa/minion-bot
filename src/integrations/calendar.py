@@ -163,7 +163,7 @@ def get_credentials_for_user(telegram_user_id: int) -> Credentials | None:
                 update_user_calendar_token_credentials(
                     session,
                     telegram_user_id,
-                    access_token=creds.token,
+                    access_token=creds.token or "",
                     expiry=creds.expiry,
                 )
                 logger.info(f"Refreshed token for user {telegram_user_id}")
@@ -274,6 +274,8 @@ def sync_events(start: datetime, end: datetime) -> int:
     with session_scope() as session:
         for event in events:
             google_id = event.get("id")
+            if not google_id:
+                continue
             title = event.get("summary", "Untitled")
 
             # Parse start/end times

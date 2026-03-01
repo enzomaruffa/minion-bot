@@ -637,7 +637,6 @@ async def api_free_slots(
     from src.agent.tools.scheduling import find_free_slot
 
     result = find_free_slot(
-        date=date or "today",
         duration_minutes=duration_minutes,
     )
     return {"slots": result}

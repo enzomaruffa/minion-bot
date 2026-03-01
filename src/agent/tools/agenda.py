@@ -75,7 +75,7 @@ def get_agenda(date: str | None = None) -> str:
             lines.append("OVERDUE")
             for task in overdue_tasks:
                 project_emoji = task.project.emoji + " " if task.project else ""
-                days_overdue = (now - task.due_date).days
+                days_overdue = (now - task.due_date).days if task.due_date else 0
                 lines.append(f"  #{task.id} {project_emoji}{task.title} ({days_overdue}d overdue)")
             lines.append("")
 

@@ -113,6 +113,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 async def _handle_streaming_message(update: Update, user_message: str) -> None:
     """Handle a message with streaming response (progressive edits)."""
+    assert update.message  # guaranteed by caller
     placeholder = await update.message.reply_text("...")
     accumulated = ""
     last_edit = 0.0
@@ -247,6 +248,7 @@ async def register_commands(application: Application) -> None:
 
 def create_application() -> Application:
     """Create and configure the Telegram application."""
+    assert settings.telegram_bot_token, "TELEGRAM_BOT_TOKEN is required"
     application = Application.builder().token(settings.telegram_bot_token).build()
 
     # Add command handlers
@@ -307,6 +309,7 @@ async def send_message(text: str, parse_mode: str = "HTML") -> None:
         if current:
             chunks.append(current)
 
+    assert settings.telegram_bot_token, "TELEGRAM_BOT_TOKEN is required"
     bot = Bot(token=settings.telegram_bot_token)
     for chunk in chunks:
         try:

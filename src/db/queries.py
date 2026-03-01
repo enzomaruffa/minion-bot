@@ -902,7 +902,7 @@ def get_task_counts_by_contacts(session: Session, contact_ids: list[int]) -> dic
         select(Task.contact_id, func.count(Task.id)).where(Task.contact_id.in_(contact_ids)).group_by(Task.contact_id)
     )
     results = session.execute(stmt).all()
-    return {contact_id: count for contact_id, count in results}
+    return {contact_id: count for contact_id, count in results}  # noqa: C416
 
 
 def get_gifts_by_contact(session: Session, contact_id: int) -> Sequence[ShoppingItem]:

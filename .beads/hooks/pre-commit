@@ -22,4 +22,19 @@ if ! command -v bd >/dev/null 2>&1; then
     exit 0
 fi
 
-exec bd hook pre-commit "$@"
+# Run bd hook first
+bd hook pre-commit "$@"
+BD_STATUS=$?
+
+# Run ruff + ty checks on staged Python files
+STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM -- '*.py')
+if [ -n "$STAGED_PY" ]; then
+    echo "Running ruff check..."
+    uv run ruff check src/ || exit 1
+    echo "Running ruff format check..."
+    uv run ruff format --check src/ || exit 1
+    echo "Running ty type check..."
+    uv run ty check src/ || exit 1
+fi
+
+exit $BD_STATUS

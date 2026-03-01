@@ -57,6 +57,8 @@ select = [
     "B",     # flake8-bugbear
     "SIM",   # flake8-simplify
     "TCH",   # flake8-type-checking
+    "C4",    # flake8-comprehensions
+    "PIE",   # misc linting (unnecessary pass, duplicate kwargs)
 ]
 ignore = [
     "E712",  # SQLAlchemy requires == True/False for SQL generation

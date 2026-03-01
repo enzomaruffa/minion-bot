@@ -184,14 +184,13 @@ _session_id: str | None = None
 
 
 def _build_system_prompt(format_hint: str) -> str:
-    """Build full system prompt with format hints and memory context."""
+    """Build full system prompt with format hints, memory, and event bus context."""
+    from src.db.queries import get_active_work, get_recent_completed_work, get_recent_events, list_agent_memories
+
     parts = [SYSTEM_PROMPT_BASE]
 
     # Inject long-term memories if available
     try:
-        from src.db import session_scope
-        from src.db.queries import list_agent_memories
-
         with session_scope() as session:
             memories = list_agent_memories(session, limit=20)
             if memories:
@@ -200,7 +199,37 @@ def _build_system_prompt(format_hint: str) -> str:
                     lines.append(f"- [{m.category}] {m.key}: {m.content}")
                 parts.append("\n".join(lines))
     except Exception:
-        # Memory table may not exist yet (migration pending)
+        pass
+
+    # Inject recent event bus activity
+    try:
+        with session_scope() as session:
+            events = get_recent_events(session, limit=30, since_hours=24)
+            if events:
+                lines = ["\nRECENT ACTIVITY (last 24h — includes heartbeat, scheduler, and your own responses):"]
+                for e in reversed(events):  # chronological order
+                    ts = e.timestamp.strftime("%H:%M") if e.timestamp else "?"
+                    lines.append(f"- [{ts} {e.source}] {e.event_type}: {e.summary[:200]}")
+                parts.append("\n".join(lines))
+
+            # Show active subagent work
+            active = get_active_work(session)
+            if active:
+                lines = ["\nACTIVE SUBAGENT WORK:"]
+                for w in active:
+                    started = w.started_at.strftime("%H:%M") if w.started_at else "?"
+                    lines.append(f"- {w.agent_name}: {w.description} (started {started})")
+                parts.append("\n".join(lines))
+
+            # Show recently completed work
+            completed = get_recent_completed_work(session, hours=24)
+            if completed:
+                lines = ["\nRECENTLY COMPLETED WORK:"]
+                for w in completed[:5]:
+                    result_preview = w.result[:150] if w.result else "(no result)"
+                    lines.append(f"- {w.agent_name}: {w.description} -> {result_preview}")
+                parts.append("\n".join(lines))
+    except Exception:
         pass
 
     # Format-specific instructions

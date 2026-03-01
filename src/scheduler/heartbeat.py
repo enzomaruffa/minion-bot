@@ -10,6 +10,9 @@ from src.config import settings
 from src.db import session_scope
 from src.db.models import TaskStatus
 from src.db.queries import (
+    get_active_work,
+    get_recent_completed_work,
+    get_recent_events,
     get_user_profile,
     list_due_interests,
     list_recent_heartbeat_logs,
@@ -123,6 +126,33 @@ def _build_context() -> str:
         mood = show_mood_history(days=3)
         if mood and "No mood" not in mood:
             lines.append(f"\nRecent mood:\n{mood}")
+    except Exception:
+        pass
+
+    # Recent event bus activity (user messages, agent responses, notifications)
+    try:
+        with session_scope() as session:
+            events = get_recent_events(session, limit=20, since_hours=24)
+            if events:
+                lines.append("\nRecent activity (event bus):")
+                for e in reversed(events):
+                    ts = e.timestamp.strftime("%H:%M") if e.timestamp else "?"
+                    lines.append(f"  [{ts} {e.source}] {e.event_type}: {e.summary[:150]}")
+
+            # Active subagent work
+            active = get_active_work(session)
+            if active:
+                lines.append("\nActive subagent work:")
+                for w in active:
+                    lines.append(f"  {w.agent_name}: {w.description}")
+
+            # Recently completed work
+            completed = get_recent_completed_work(session, hours=24)
+            if completed:
+                lines.append("\nRecently completed work:")
+                for w in completed[:5]:
+                    result_preview = w.result[:100] if w.result else "(no result)"
+                    lines.append(f"  {w.agent_name}: {w.description} -> {result_preview}")
     except Exception:
         pass
 

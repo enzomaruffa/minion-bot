@@ -9,8 +9,25 @@ model_list:
       model: openai/gpt-5.2
       api_key: os.environ/OPENAI_API_KEY
 
+  # GPT-5.2 (subagents — SDK maps opus/sonnet to claude-opus-4-6/claude-sonnet-4-6)
+  - model_name: claude-opus-4-6
+    litellm_params:
+      model: openai/gpt-5.2
+      api_key: os.environ/OPENAI_API_KEY
+
+  - model_name: claude-sonnet-4-6
+    litellm_params:
+      model: openai/gpt-5.2
+      api_key: os.environ/OPENAI_API_KEY
+
   # GPT-5-mini (heartbeat / lightweight tasks)
   - model_name: claude-haiku-3-5
+    litellm_params:
+      model: openai/gpt-5-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+  # GPT-5-mini (SDK maps haiku to claude-haiku-4-5)
+  - model_name: claude-haiku-4-5
     litellm_params:
       model: openai/gpt-5-mini
       api_key: os.environ/OPENAI_API_KEY

@@ -21,6 +21,7 @@ from claude_agent_sdk import (
 )
 
 from src.agent.sdk_tools import MAIN_TOOLS
+from src.agent.subagents import SUBAGENTS
 from src.config import settings
 from src.db import session_scope
 from src.db.queries import log_agent_event
@@ -113,6 +114,17 @@ When the user corrects you, expresses a preference, or you learn a fact:
 - Use save_memory to store it for future reference
 - Before decisions, use recall_memory to check stored context
 - Keep memory keys descriptive (e.g., "preference_meeting_times", "fact_user_name")
+
+SUBAGENT DELEGATION:
+You have specialized subagents you can delegate to. Use them for complex tasks:
+- researcher: web research, price comparison, news, information gathering
+- planner: daily/weekly planning, schedule optimization, prioritization
+- task-breakdown: decompose complex tasks into subtasks with action plans
+- content-creator: draft notes, lesson plans, checklists, templates
+- shopping-scout: product research, price comparison, deal finding
+- social-manager: birthday prep, gift ideas, contact management
+- analyst: mood trends, task patterns, productivity reports
+Delegate proactively — subagents do deeper, focused work than you can inline.
 
 LANGUAGE: Always reply in English, regardless of the language the user writes in.
 
@@ -269,6 +281,7 @@ async def chat(message: str, format_hint: str = "telegram") -> str:
         system_prompt=_build_system_prompt(format_hint),
         mcp_servers=mcp_servers,
         allowed_tools=_build_allowed_tools(),
+        agents=SUBAGENTS,
         max_turns=20,
         env={
             "ANTHROPIC_BASE_URL": settings.anthropic_base_url,
@@ -337,6 +350,7 @@ async def chat_stream(message: str, format_hint: str = "telegram"):
         system_prompt=_build_system_prompt(format_hint),
         mcp_servers=mcp_servers,
         allowed_tools=_build_allowed_tools(),
+        agents=SUBAGENTS,
         max_turns=20,
         env={
             "ANTHROPIC_BASE_URL": settings.anthropic_base_url,

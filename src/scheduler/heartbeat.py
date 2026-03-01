@@ -3,6 +3,7 @@
 import logging
 from datetime import datetime
 
+from src.agent.subagents import SUBAGENTS
 from src.agent.tools.agenda import get_agenda
 from src.agent.tools.mood import show_mood_history
 from src.agent.tools.profile import get_weather
@@ -43,7 +44,15 @@ WHAT YOU CAN DO:
 2. HELP WITH TASKS — compare prices for shopping items, research for tasks, draft notes
 3. PLAN — suggest scheduling, break down complex tasks, suggest next steps
 4. NOTIFY — send concise, actionable messages to the user via send_proactive_notification
-5. DELEGATE — use delegate_research/delegate_task_work for deep dives
+5. DELEGATE TO SUBAGENTS — you have specialized subagents for deep work:
+   - researcher: web research, price comparison, news gathering
+   - planner: daily/weekly planning, schedule optimization
+   - task-breakdown: decompose complex tasks into subtasks
+   - content-creator: draft notes, lesson plans, checklists
+   - shopping-scout: product research, deal finding
+   - social-manager: birthday prep, gift ideas
+   - analyst: mood trends, productivity reports
+   Prefer subagents over doing shallow work yourself — they do deeper, focused work.
 6. TRACK WORK — use beads_create/beads_list to track sub-tasks
 
 RULES:
@@ -217,6 +226,7 @@ async def _run_heartbeat_sdk(prompt: str) -> str | None:
         system_prompt=prompt,
         mcp_servers={"hb": heartbeat_server},
         allowed_tools=[f"mcp__hb__{t.name}" for t in HEARTBEAT_TOOLS],
+        agents=SUBAGENTS,
         max_turns=15,
         env={
             "ANTHROPIC_BASE_URL": settings.anthropic_base_url,

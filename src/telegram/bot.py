@@ -354,11 +354,26 @@ async def send_message(text: str, parse_mode: str = "HTML") -> None:
                 raise
 
 
+async def send_file_message(file_path: str, caption: str = "") -> None:
+    """Send a file to the user via Telegram."""
+    from telegram import Bot
+
+    assert settings.telegram_bot_token, "TELEGRAM_BOT_TOKEN is required"
+    bot = Bot(token=settings.telegram_bot_token)
+    with open(file_path, "rb") as f:
+        await bot.send_document(
+            chat_id=settings.telegram_user_id,
+            document=f,
+            caption=caption or None,
+        )
+
+
 def register_notification_handler() -> None:
-    """Register send_message as a notification handler."""
-    from src.notifications import register_handler
+    """Register send_message and send_file_message as notification handlers."""
+    from src.notifications import register_file_handler, register_handler
 
     register_handler(send_message)
+    register_file_handler(send_file_message)
 
 
 # Error notification rate limiting (bounded to prevent memory leak)

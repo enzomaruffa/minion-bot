@@ -147,6 +147,7 @@ from src.agent.tools.contacts import (  # noqa: E402
     upcoming_birthdays,
     update_contact_tool,
 )
+from src.agent.tools.files import send_file  # noqa: E402
 from src.agent.tools.heartbeat_tools import (  # noqa: E402
     check_dedup,
     delegate_research,
@@ -360,6 +361,8 @@ _AUTO_WRAP_MAIN = [
     # Web
     web_search,
     fetch_url,
+    # Files
+    send_file,
     # Interests
     add_interest,
     list_interests,

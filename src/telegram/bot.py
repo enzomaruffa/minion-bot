@@ -155,7 +155,7 @@ async def _handle_streaming_message(update: Update, user_message: str) -> None:
 
                 elif event_type == "thinking":
                     if data:
-                        status_lines.append(f"\U0001f4ad {data[:80]}")
+                        status_lines.append(f"\U0001f4ad {data}")
                         await _update_status()
 
                 elif event_type == "text":
@@ -173,17 +173,19 @@ async def _handle_streaming_message(update: Update, user_message: str) -> None:
         text = accumulated.strip() or "Done."
         await safe_reply(message, text)
     except TimeoutError:
-        logger.error("Streaming timed out after %d seconds", SDK_TIMEOUT)
+        logger.error("Streaming timed out after %d seconds, accumulated %d chars", SDK_TIMEOUT, len(accumulated))
         if status_msg:
             with contextlib.suppress(Exception):
                 await status_msg.delete()
         await safe_reply(message, "Sorry, that took too long (20 min limit). Try a simpler request.")
     except Exception:
-        logger.exception("Streaming error, falling back to non-streaming")
+        logger.exception("Streaming error (%d chars accumulated), falling back to chat()", len(accumulated))
         if status_msg:
             with contextlib.suppress(Exception):
                 await status_msg.delete()
+        logger.info("Fallback chat() starting for: %s", user_message[:100])
         response = await chat(user_message)
+        logger.info("Fallback chat() returned %d chars", len(response))
         await safe_reply(message, response)
 
 

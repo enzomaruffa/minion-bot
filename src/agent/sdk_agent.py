@@ -316,12 +316,12 @@ async def chat(message: str, format_hint: str = "telegram") -> str:
                         logger.info(f"Session {_session_id}: {msg.num_turns} turns, ${msg.total_cost_usd:.4f}")
                         break
     except TimeoutError:
+        logger.error("chat() timed out after %d seconds — resetting session (was %s)", SDK_TIMEOUT, _session_id)
         _session_id = None
-        logger.error("SDK agent timed out after %d seconds", SDK_TIMEOUT)
         raise TimeoutError(f"Agent timed out after {SDK_TIMEOUT // 60} minutes") from None
     except Exception as e:
+        logger.exception("chat() error — resetting session (was %s): %s", _session_id, e)
         _session_id = None
-        logger.exception(f"SDK agent error: {e}")
         raise
 
     if not response_text.strip():
@@ -389,12 +389,20 @@ async def chat_stream(message: str, format_hint: str = "telegram"):
                         elif isinstance(block, ToolUseBlock):
                             yield ("tool_call", block.name)
                         elif isinstance(block, ThinkingBlock):
-                            yield ("thinking", block.thinking[:100] if block.thinking else "")
+                            yield ("thinking", block.thinking or "")
                 elif isinstance(msg, ResultMessage):
                     _session_id = msg.session_id
                     yield ("result", msg.session_id or "")
                     break
+    except GeneratorExit:
+        # Consumer stopped iterating (e.g. break after "result").
+        # SDK cleanup can fail with RuntimeError when anyio cancel scopes
+        # cross task boundaries — suppress it to avoid killing the response.
+        logger.warning("chat_stream GeneratorExit — resetting session (was %s)", _session_id)
+        _session_id = None
+        return
     except Exception:
+        logger.exception("chat_stream error — resetting session (was %s)", _session_id)
         _session_id = None
         raise
 

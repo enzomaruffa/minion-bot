@@ -6,7 +6,6 @@ requires-python = ">=3.11"
 dependencies = [
     "aiosqlite>=0.22.1",
     "apscheduler>=3.11.2",
-    "claude-agent-sdk>=0.1.0",
     "fastapi>=0.129.2",
     "google-api-python-client>=2.190.0",
     "google-auth-oauthlib>=1.2.4",
@@ -22,9 +21,9 @@ dependencies = [
     "itsdangerous>=2.2.0",
     "readability-lxml>=0.8.4.1",
     "httpx>=0.28.1",
-    "mcp>=1.26.0",
     "ddgs>=9.10.0",
     "python-pptx>=1.0.2",
+    "agno>=2.5.7",
 ]
 
 [build-system]

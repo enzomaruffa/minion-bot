@@ -17,6 +17,7 @@ from agno.models.openai import OpenAIChat
 from agno.team import Team, TeamRunEvent
 from agno.team.team import TeamMode
 
+from src.agent.memory_extractor import extract_memories_background
 from src.agent.team import build_team_members
 from src.agent.tools import (
     # Contacts
@@ -513,6 +514,9 @@ async def chat(message: str, format_hint: str = "telegram") -> str:
     except Exception:
         logger.debug("Failed to log agent response to event bus", exc_info=True)
 
+    # Extract memories in background (fire-and-forget)
+    asyncio.create_task(extract_memories_background(message, response_text))
+
     logger.info(f"Chat output: {response_text[:100]}{'...' if len(response_text) > 100 else ''}")
     return response_text
 
@@ -581,6 +585,9 @@ async def chat_stream(message: str, format_hint: str = "telegram"):
                 log_agent_event(session, "chat_stream", "agent_response", full_text[:500])
         except Exception:
             logger.debug("Failed to log agent response to event bus", exc_info=True)
+
+        # Extract memories in background (fire-and-forget)
+        asyncio.create_task(extract_memories_background(message, full_text))
 
 
 async def shutdown() -> None:

@@ -778,11 +778,12 @@ async def api_chat(body: ChatRequest) -> ChatResponse:
 @router.post("/chat/stream", dependencies=[Depends(get_current_user)])
 async def api_chat_stream(body: ChatRequest):
     """Streaming chat endpoint — returns Server-Sent Events."""
+    import asyncio
     import json
 
     from fastapi.responses import StreamingResponse
 
-    from src.agent import chat_stream
+    from src.agent import SDK_TIMEOUT, chat_stream
 
     async def event_generator():
         if chat_stream is None:
@@ -792,15 +793,20 @@ async def api_chat_stream(body: ChatRequest):
             response = await chat(body.message, format_hint="web")
             yield f"data: {json.dumps({'type': 'text', 'text': response})}\n\n"
         else:
-            async for event_type, data in chat_stream(body.message, format_hint="web"):
-                if event_type == "text":
-                    yield f"data: {json.dumps({'type': 'text', 'text': data})}\n\n"
-                elif event_type == "tool_call":
-                    yield f"data: {json.dumps({'type': 'tool_call', 'name': data})}\n\n"
-                elif event_type == "thinking":
-                    yield f"data: {json.dumps({'type': 'thinking', 'text': data})}\n\n"
-                elif event_type == "result":
-                    break
+            try:
+                async with asyncio.timeout(SDK_TIMEOUT):
+                    async for event_type, data in chat_stream(body.message, format_hint="web"):
+                        if event_type == "text":
+                            yield f"data: {json.dumps({'type': 'text', 'text': data})}\n\n"
+                        elif event_type == "tool_call":
+                            yield f"data: {json.dumps({'type': 'tool_call', 'name': data})}\n\n"
+                        elif event_type == "thinking":
+                            yield f"data: {json.dumps({'type': 'thinking', 'text': data})}\n\n"
+                        elif event_type == "result":
+                            break
+            except TimeoutError:
+                logger.error("SSE stream timed out after %d seconds", SDK_TIMEOUT)
+                yield f"data: {json.dumps({'type': 'error', 'text': 'Request timed out (10 min limit)'})}\n\n"
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")

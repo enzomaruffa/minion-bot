@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time as _time
 import uuid
@@ -12,7 +13,7 @@ from telegram.ext import (
     filters,
 )
 
-from src.agent import chat, chat_stream
+from src.agent import SDK_TIMEOUT, chat, chat_stream
 from src.config import settings
 from src.db import session_scope
 from src.db.queries import log_agent_event
@@ -144,23 +145,24 @@ async def _handle_streaming_message(update: Update, user_message: str) -> None:
                 pass
 
     try:
-        async for event_type, data in chat_stream(user_message):
-            if event_type == "tool_call":
-                # Strip mcp server prefix for readability
-                name = data.split("__")[-1] if "__" in data else data
-                status_lines.append(f"\U0001f527 {name}")
-                await _update_status()
-
-            elif event_type == "thinking":
-                if data:
-                    status_lines.append(f"\U0001f4ad {data[:80]}")
+        async with asyncio.timeout(SDK_TIMEOUT):
+            async for event_type, data in chat_stream(user_message):
+                if event_type == "tool_call":
+                    # Strip mcp server prefix for readability
+                    name = data.split("__")[-1] if "__" in data else data
+                    status_lines.append(f"\U0001f527 {name}")
                     await _update_status()
 
-            elif event_type == "text":
-                accumulated += data
+                elif event_type == "thinking":
+                    if data:
+                        status_lines.append(f"\U0001f4ad {data[:80]}")
+                        await _update_status()
 
-            elif event_type == "result":
-                break
+                elif event_type == "text":
+                    accumulated += data
+
+                elif event_type == "result":
+                    break
 
         # Delete status message
         if status_msg:
@@ -170,6 +172,12 @@ async def _handle_streaming_message(update: Update, user_message: str) -> None:
         # Send final response
         text = accumulated.strip() or "Done."
         await safe_reply(message, text)
+    except TimeoutError:
+        logger.error("Streaming timed out after %d seconds", SDK_TIMEOUT)
+        if status_msg:
+            with contextlib.suppress(Exception):
+                await status_msg.delete()
+        await safe_reply(message, "Sorry, that took too long (10 min limit). Try a simpler request.")
     except Exception:
         logger.exception("Streaming error, falling back to non-streaming")
         if status_msg:

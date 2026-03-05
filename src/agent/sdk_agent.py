@@ -8,6 +8,7 @@ ANTHROPIC_BASE_URL override.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -196,6 +197,9 @@ def _get_external_mcp_servers() -> dict[str, Any]:
 
 _session_id: str | None = None
 
+# Maximum wall-clock time for a single chat/stream invocation (seconds).
+SDK_TIMEOUT = 600  # 10 minutes
+
 
 def _build_system_prompt(format_hint: str) -> str:
     """Build full system prompt with format hints, memory, and event bus context."""
@@ -299,18 +303,24 @@ async def chat(message: str, format_hint: str = "telegram") -> str:
     response_text = ""
 
     try:
-        async with ClaudeSDKClient(options=options) as client:
-            await client.query(message)
-            async for msg in client.receive_response():
-                if isinstance(msg, AssistantMessage):
-                    for block in msg.content:
-                        if isinstance(block, TextBlock):
-                            response_text += block.text
-                elif isinstance(msg, ResultMessage):
-                    _session_id = msg.session_id
-                    logger.info(f"Session {_session_id}: {msg.num_turns} turns, ${msg.total_cost_usd:.4f}")
-                    break
+        async with asyncio.timeout(SDK_TIMEOUT):
+            async with ClaudeSDKClient(options=options) as client:
+                await client.query(message)
+                async for msg in client.receive_response():
+                    if isinstance(msg, AssistantMessage):
+                        for block in msg.content:
+                            if isinstance(block, TextBlock):
+                                response_text += block.text
+                    elif isinstance(msg, ResultMessage):
+                        _session_id = msg.session_id
+                        logger.info(f"Session {_session_id}: {msg.num_turns} turns, ${msg.total_cost_usd:.4f}")
+                        break
+    except TimeoutError:
+        _session_id = None
+        logger.error("SDK agent timed out after %d seconds", SDK_TIMEOUT)
+        raise TimeoutError(f"Agent timed out after {SDK_TIMEOUT // 60} minutes") from None
     except Exception as e:
+        _session_id = None
         logger.exception(f"SDK agent error: {e}")
         raise
 
@@ -368,21 +378,25 @@ async def chat_stream(message: str, format_hint: str = "telegram"):
     if _session_id:
         options.resume = _session_id
 
-    async with ClaudeSDKClient(options=options) as client:
-        await client.query(message)
-        async for msg in client.receive_response():
-            if isinstance(msg, AssistantMessage):
-                for block in msg.content:
-                    if isinstance(block, TextBlock):
-                        yield ("text", block.text)
-                    elif isinstance(block, ToolUseBlock):
-                        yield ("tool_call", block.name)
-                    elif isinstance(block, ThinkingBlock):
-                        yield ("thinking", block.thinking[:100] if block.thinking else "")
-            elif isinstance(msg, ResultMessage):
-                _session_id = msg.session_id
-                yield ("result", msg.session_id or "")
-                break
+    try:
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(message)
+            async for msg in client.receive_response():
+                if isinstance(msg, AssistantMessage):
+                    for block in msg.content:
+                        if isinstance(block, TextBlock):
+                            yield ("text", block.text)
+                        elif isinstance(block, ToolUseBlock):
+                            yield ("tool_call", block.name)
+                        elif isinstance(block, ThinkingBlock):
+                            yield ("thinking", block.thinking[:100] if block.thinking else "")
+                elif isinstance(msg, ResultMessage):
+                    _session_id = msg.session_id
+                    yield ("result", msg.session_id or "")
+                    break
+    except Exception:
+        _session_id = None
+        raise
 
 
 async def shutdown() -> None:

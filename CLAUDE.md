@@ -1,11 +1,10 @@
 # MINION - Personal Assistant Bot
 
-Single-user personal assistant powered by the Claude Agent SDK via LiteLLM proxy (model-agnostic). Manages tasks, reminders, shopping lists, contacts/birthdays, calendar events, and Silverbullet notes. Accessible via Telegram bot and web dashboard (HTMX). Runs a FastAPI server alongside the optional Telegram polling loop. APScheduler handles proactive behaviors (morning summary, reminders, birthday nudges, calendar sync, heartbeat).
+Single-user personal assistant powered by Agno (multi-agent framework) with OpenAI-compatible models. Manages tasks, reminders, shopping lists, contacts/birthdays, calendar events, and Silverbullet notes. Accessible via Telegram bot and web dashboard (HTMX). Runs a FastAPI server alongside the optional Telegram polling loop. APScheduler handles proactive behaviors (morning summary, reminders, birthday nudges, calendar sync, heartbeat).
 
 ## Tech Stack
 - Python 3.11+ with `uv` for package management
-- Claude Agent SDK (`claude-agent-sdk`) — wraps Claude Code CLI, tools via in-process MCP server
-- LiteLLM proxy — Anthropic-compatible API translating to Gemini/GPT backends
+- Agno (`agno`) — multi-agent framework with Team coordination, direct OpenAI API calls
 - SQLite via SQLAlchemy (declarative models)
 - python-telegram-bot for Telegram integration (optional — web-only mode supported)
 - FastAPI + Jinja2 + HTMX + Pico CSS for web dashboard
@@ -29,8 +28,9 @@ minion/
 │   ├── notifications.py      # Notification dispatcher (decouples scheduler from Telegram)
 │   ├── utils.py              # Shared helpers (date parsing, birthday calc)
 │   ├── agent/
-│   │   ├── sdk_agent.py      # Claude Agent SDK client, chat(), chat_stream(), system prompt
-│   │   ├── sdk_tools/        # SDK tool wrappers: make_sdk_tool(), auto-schema, MAIN_TOOLS/HEARTBEAT_TOOLS
+│   │   ├── agent.py          # Agno Team leader, chat(), chat_stream(), system prompt
+│   │   ├── team.py           # Agno Team member definitions (5 specialized agents)
+│   │   ├── mcp.py            # MCP server lifecycle (Playwright, Beads, custom)
 │   │   └── tools/            # ~76 tool implementation functions (tasks, shopping, contacts, calendar, notes, profile, bookmarks, mood, scheduling, memory)
 │   ├── telegram/
 │   │   ├── bot.py            # Message/voice/photo handlers, send_message, error notifications
@@ -80,7 +80,7 @@ minion/
 All Telegram handlers use the `@require_auth` decorator from `src/telegram/commands.py`. Never duplicate the `is_authorized()` check inline. The decorator returns early with "Not authorized." if the user doesn't match `settings.telegram_user_id`.
 
 ### AI Models: configurable via settings
-Model names live in `settings.agent_model`, `settings.vision_model` (default to `claude-sonnet-4-5`/`gpt-5.2`). Override via `AGENT_MODEL`, `VISION_MODEL` env vars. LiteLLM proxy translates Anthropic model names to actual provider models. Never hardcode model strings in agent/vision code.
+Model names live in `settings.agent_model`, `settings.vision_model` (default to `gpt-5.2`/`gpt-5.2`). Override via `AGENT_MODEL`, `VISION_MODEL` env vars. Agno's `OpenAIChat` makes direct API calls using `OPENAI_API_KEY`. Never hardcode model strings in agent/vision code.
 
 ### Datetimes: always timezone-aware
 Use `datetime.now(timezone.utc)` everywhere. Model defaults use `default=lambda: datetime.now(timezone.utc)`. Never use `datetime.utcnow()` (deprecated).
@@ -134,14 +134,17 @@ When `TELEGRAM_BOT_TOKEN` is not set, the bot starts in web-only mode: no Telegr
 ### Google OAuth moved to /oauth/*
 OAuth routes moved from `/auth/start` to `/oauth/start`, `/auth/callback` to `/oauth/callback`. Legacy redirects in place for backwards compatibility.
 
-### Agent architecture: Claude Agent SDK + LiteLLM
-- `src/agent/sdk_agent.py` — creates `ClaudeSDKClient`, passes `ANTHROPIC_BASE_URL`/`ANTHROPIC_API_KEY` env vars pointing to LiteLLM proxy
-- Tools are plain Python functions in `src/agent/tools/`, wrapped via `make_sdk_tool()` in `src/agent/sdk_tools/__init__.py` and served as in-process MCP server
-- Format hints (Telegram HTML vs web Markdown) are injected into the system prompt, eliminating the old double-LLM-call formatter
-- Streaming: `chat_stream()` yields text chunks; Telegram uses placeholder+edit pattern, web uses SSE
-- Session persistence via `session_id` passed as `resume=` on subsequent calls
-- Heartbeat uses a separate short-lived `ClaudeSDKClient` with a subset of tools (`HEARTBEAT_TOOLS`)
+### Agent architecture: Agno Team + OpenAI
+- `src/agent/agent.py` — creates Agno `Team` (leader + 5 members), `chat()`, `chat_stream()`, system prompt
+- `src/agent/team.py` — 5 specialized `Agent` members (researcher, planner, content-creator, shopping-scout, social-manager)
+- `src/agent/mcp.py` — connects external MCP servers (Playwright, Beads) via `agno.tools.mcp.MCPTools`
+- Tools are plain Python functions in `src/agent/tools/`, passed directly to `Agent(tools=[...])` — no wrapping needed
+- Format hints (Telegram HTML vs web Markdown) are injected into the system prompt
+- Streaming: `chat_stream()` yields `(event_type, data)` tuples; Telegram uses placeholder+edit pattern, web uses SSE
+- Session persistence via `agno.db.sqlite.SqliteDb` with `session_id` on each `arun()` call
+- Heartbeat uses a separate `Agent` instance with subset of tools (no Team overhead)
 - Explicit memory: `AgentMemory` model (save/recall/list/forget) — agent is instructed to save preferences and facts
+- Leader delegates to members for multi-step domain work; handles simple CRUD directly
 
 ### Scheduler jobs
 Registered in `src/main.py:register_jobs()`. Current jobs:

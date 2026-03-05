@@ -177,7 +177,7 @@ async def _handle_streaming_message(update: Update, user_message: str) -> None:
         if status_msg:
             with contextlib.suppress(Exception):
                 await status_msg.delete()
-        await safe_reply(message, "Sorry, that took too long (10 min limit). Try a simpler request.")
+        await safe_reply(message, "Sorry, that took too long (20 min limit). Try a simpler request.")
     except Exception:
         logger.exception("Streaming error, falling back to non-streaming")
         if status_msg:

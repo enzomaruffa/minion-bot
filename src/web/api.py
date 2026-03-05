@@ -806,7 +806,7 @@ async def api_chat_stream(body: ChatRequest):
                             break
             except TimeoutError:
                 logger.error("SSE stream timed out after %d seconds", SDK_TIMEOUT)
-                yield f"data: {json.dumps({'type': 'error', 'text': 'Request timed out (10 min limit)'})}\n\n"
+                yield f"data: {json.dumps({'type': 'error', 'text': 'Request timed out (20 min limit)'})}\n\n"
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")

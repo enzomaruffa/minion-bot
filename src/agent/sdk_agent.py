@@ -198,7 +198,7 @@ def _get_external_mcp_servers() -> dict[str, Any]:
 _session_id: str | None = None
 
 # Maximum wall-clock time for a single chat/stream invocation (seconds).
-SDK_TIMEOUT = 600  # 10 minutes
+SDK_TIMEOUT = 1200  # 20 minutes
 
 
 def _build_system_prompt(format_hint: str) -> str:

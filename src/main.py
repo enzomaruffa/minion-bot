@@ -68,11 +68,16 @@ def register_jobs() -> None:
 
 
 async def _init_mcp_and_agent() -> None:
-    """Initialize MCP servers and recreate agent with MCP tools.
+    """Initialize MCP servers and inject tools into the Agno agent."""
+    from src.agent.agent import set_mcp_tools
+    from src.agent.mcp import init_mcp_servers
 
-    In SDK mode, MCP is handled natively by ClaudeAgentOptions — this is a no-op.
-    """
-    logger.info("Claude Agent SDK handles MCP natively — skipping MCP init")
+    try:
+        mcp_tools = await init_mcp_servers()
+        set_mcp_tools(mcp_tools)
+        logger.info(f"MCP init complete: {len(mcp_tools)} tool sets injected into agent")
+    except Exception as e:
+        logger.warning(f"MCP init failed (agent will work without MCP tools): {e}")
 
 
 async def post_init(application) -> None:
@@ -93,6 +98,14 @@ async def post_shutdown(application) -> None:
     """Called during shutdown."""
     logger.info("Stopping scheduler...")
     shutdown_scheduler()
+
+    logger.info("Closing MCP servers...")
+    try:
+        from src.agent.mcp import close_mcp_servers
+
+        await close_mcp_servers()
+    except Exception as e:
+        logger.warning(f"Error closing MCP servers: {e}")
 
     logger.info("Cleaning up agent...")
     try:

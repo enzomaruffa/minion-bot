@@ -40,9 +40,6 @@ class Settings:
     heartbeat_max_notifications: int
     # MCP server commands
     mcp_server_commands: list[str]
-    # Claude Agent SDK settings
-    anthropic_base_url: str
-    anthropic_api_key: str
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -74,7 +71,7 @@ class Settings:
 
         silverbullet_space_path = Path(os.environ.get("SILVERBULLET_SPACE_PATH", ""))
 
-        agent_model = os.environ.get("AGENT_MODEL", "claude-sonnet-4-5")
+        agent_model = os.environ.get("AGENT_MODEL", "gpt-5.2")
         vision_model = os.environ.get("VISION_MODEL", "gpt-5.2")
 
         default_reminder_offset_hours = float(os.environ.get("DEFAULT_REMINDER_OFFSET_HOURS", "1.0"))
@@ -84,17 +81,13 @@ class Settings:
 
         # Heartbeat settings
         heartbeat_interval_minutes = int(os.environ.get("HEARTBEAT_INTERVAL_MINUTES", "60"))
-        heartbeat_model = os.environ.get("HEARTBEAT_MODEL", "claude-haiku-3-5")
+        heartbeat_model = os.environ.get("HEARTBEAT_MODEL", "gpt-5-mini")
         heartbeat_enabled = os.environ.get("HEARTBEAT_ENABLED", "true").lower() == "true"
         heartbeat_max_notifications = int(os.environ.get("HEARTBEAT_MAX_NOTIFICATIONS", "3"))
 
         # MCP server commands (comma-separated)
         mcp_cmds = os.environ.get("MCP_SERVER_COMMANDS", "")
         mcp_server_commands = [c.strip() for c in mcp_cmds.split(",") if c.strip()]
-
-        # Claude Agent SDK settings
-        anthropic_base_url = os.environ.get("ANTHROPIC_BASE_URL", "http://localhost:4000")
-        anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
 
         return cls(
             telegram_bot_token=telegram_bot_token,
@@ -119,8 +112,6 @@ class Settings:
             heartbeat_enabled=heartbeat_enabled,
             heartbeat_max_notifications=heartbeat_max_notifications,
             mcp_server_commands=mcp_server_commands,
-            anthropic_base_url=anthropic_base_url,
-            anthropic_api_key=anthropic_api_key,
         )
 
 

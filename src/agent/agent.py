@@ -1,9 +1,8 @@
-"""Claude Agent SDK based agent for Minion.
+"""Agno-based agent for Minion.
 
-Replaces the Agno-based agent with ClaudeSDKClient. Tools are served as
-an in-process MCP server; external MCP servers (Playwright, Beads) are
-passed as subprocess configs. LiteLLM proxy handles model routing via
-ANTHROPIC_BASE_URL override.
+Uses Agno Team with OpenAIChat for direct API calls (no proxy).
+Tools are plain Python functions passed directly to Agent(tools=[...]).
+MCP servers (Playwright, Beads) are connected via agno.tools.mcp.MCPTools.
 """
 
 from __future__ import annotations
@@ -12,19 +11,115 @@ import asyncio
 import logging
 from typing import Any
 
-from claude_agent_sdk import (
-    AssistantMessage,
-    ClaudeAgentOptions,
-    ClaudeSDKClient,
-    ResultMessage,
-    TextBlock,
-    ThinkingBlock,
-    ToolUseBlock,
-    create_sdk_mcp_server,
-)
+from agno.agent import RunEvent
+from agno.db.sqlite import SqliteDb
+from agno.models.openai import OpenAIChat
+from agno.team import Team, TeamRunEvent
+from agno.team.team import TeamMode
 
-from src.agent.sdk_tools import MAIN_TOOLS
-from src.agent.subagents import SUBAGENTS
+from src.agent.team import build_team_members
+from src.agent.tools import (
+    # Contacts
+    add_contact,
+    # Interests
+    add_interest,
+    add_subtask,
+    # Tasks
+    add_tasks,
+    # Shopping
+    add_to_list,
+    append_to_note_tool,
+    archive_project,
+    assign_tasks_to_project,
+    assign_to_project,
+    # Beads
+    beads_create,
+    beads_list,
+    beads_ready,
+    # Notes
+    browse_notes,
+    cancel_reminder,
+    check_item,
+    clear_checked,
+    complete_task,
+    create_calendar_event,
+    create_note_tool,
+    # Projects
+    create_project,
+    delete_calendar_event,
+    delete_task_tool,
+    fetch_url,
+    # Scheduling
+    find_free_slot,
+    forget_memory,
+    # Agenda
+    get_agenda,
+    get_contact_tasks,
+    # Misc
+    get_current_datetime,
+    get_overdue_tasks,
+    get_task_details,
+    get_weather,
+    list_calendar_events,
+    list_interests,
+    list_memories,
+    list_projects_tool,
+    list_reading_list,
+    list_recurring,
+    list_reminders,
+    list_tags,
+    list_tasks,
+    # Mood
+    log_mood,
+    mark_read,
+    mood_summary,
+    move_project_tasks,
+    move_task,
+    purchase_item,
+    read_note_tool,
+    recall_memory,
+    remind_before_deadline,
+    remove_bookmark,
+    remove_contact,
+    remove_interest,
+    remove_item,
+    # Code
+    run_python_code,
+    run_shell_command,
+    # Bookmarks
+    save_bookmark,
+    # Memory
+    save_memory,
+    search_notes_tool,
+    search_reading_list,
+    search_tasks_tool,
+    # Files
+    send_file,
+    # Reminders
+    set_reminder,
+    show_contacts,
+    show_gifts_for_contact,
+    show_list,
+    show_mood_history,
+    show_profile,
+    show_project,
+    stop_recurring,
+    # Calendar
+    test_calendar,
+    unassign_from_project,
+    uncheck_item,
+    upcoming_birthdays,
+    update_calendar_event,
+    update_contact_tool,
+    update_interest_tool,
+    update_note_tool,
+    # Profile
+    update_profile,
+    update_project,
+    update_task_tool,
+    # Web
+    web_search,
+)
 from src.config import settings
 from src.db import session_scope
 from src.db.queries import log_agent_event
@@ -118,16 +213,31 @@ When the user corrects you, expresses a preference, or you learn a fact:
 - Before decisions, use recall_memory to check stored context
 - Keep memory keys descriptive (e.g., "preference_meeting_times", "fact_user_name")
 
-SUBAGENT DELEGATION:
-You have specialized subagents you can delegate to. Use them for complex tasks:
-- researcher: web research, price comparison, news, information gathering
-- planner: daily/weekly planning, schedule optimization, prioritization
-- task-breakdown: decompose complex tasks into subtasks with action plans
-- content-creator: draft notes, lesson plans, checklists, templates
-- shopping-scout: product research, price comparison, deal finding
-- social-manager: birthday prep, gift ideas, contact management
-- analyst: mood trends, task patterns, productivity reports
-Delegate proactively — subagents do deeper, focused work than you can inline.
+DELEGATION RULES:
+You have 5 specialized team members. Delegate when a task matches their domain AND
+requires focused multi-step work. Handle simple requests yourself — don't delegate
+one-tool actions.
+
+WHEN TO DELEGATE:
+- researcher: User needs info from the web (prices, news, products, facts).
+  Send if it requires 2+ searches or reading web pages.
+- planner: User asks to plan their day/week/schedule, optimize priorities,
+  or figure out what to work on. Send when it needs cross-referencing
+  tasks + calendar + deadlines.
+- content-creator: User needs something WRITTEN — notes, templates, lesson plans,
+  summaries, checklists. Send when output is a document, not a chat reply.
+- shopping-scout: User needs product research, price comparison, or gift ideas
+  for specific items. Send when it requires searching multiple retailers.
+- social-manager: User needs help with birthdays, gifts for specific people,
+  relationship tracking, social event planning. Send when it involves
+  cross-referencing contacts with tasks/gifts/events.
+
+WHEN NOT TO DELEGATE:
+- Simple CRUD (add task, set reminder, check item) → do it yourself
+- Task decomposition → do it yourself (you have add_subtask)
+- Data analysis / mood trends → do it yourself (you have run_python_code + mood tools)
+- Quick questions → do it yourself
+- Anything that needs 1 tool call → do it yourself
 
 LANGUAGE: Always reply in English, regardless of the language the user writes in.
 
@@ -153,52 +263,126 @@ NEVER use HTML tags.
 
 
 # ---------------------------------------------------------------------------
-# In-process MCP server for custom tools
+# All main tools — plain Python functions
 # ---------------------------------------------------------------------------
 
-_tools_server = create_sdk_mcp_server(
-    name="minion-tools",
-    version="1.0.0",
-    tools=MAIN_TOOLS,
+MAIN_TOOLS: list[Any] = [
+    get_current_datetime,
+    # Tasks
+    add_tasks,
+    update_task_tool,
+    complete_task,
+    get_overdue_tasks,
+    list_tasks,
+    search_tasks_tool,
+    get_task_details,
+    delete_task_tool,
+    add_subtask,
+    move_task,
+    list_tags,
+    list_recurring,
+    stop_recurring,
+    # Projects
+    create_project,
+    list_projects_tool,
+    show_project,
+    assign_to_project,
+    unassign_from_project,
+    archive_project,
+    assign_tasks_to_project,
+    move_project_tasks,
+    update_project,
+    # Reminders
+    set_reminder,
+    list_reminders,
+    cancel_reminder,
+    remind_before_deadline,
+    # Agenda
+    get_agenda,
+    # Calendar
+    test_calendar,
+    create_calendar_event,
+    update_calendar_event,
+    delete_calendar_event,
+    list_calendar_events,
+    # Shopping
+    add_to_list,
+    show_list,
+    check_item,
+    uncheck_item,
+    remove_item,
+    clear_checked,
+    show_gifts_for_contact,
+    purchase_item,
+    # Contacts
+    add_contact,
+    show_contacts,
+    upcoming_birthdays,
+    update_contact_tool,
+    remove_contact,
+    get_contact_tasks,
+    # Notes
+    browse_notes,
+    read_note_tool,
+    create_note_tool,
+    update_note_tool,
+    append_to_note_tool,
+    search_notes_tool,
+    # Profile
+    update_profile,
+    show_profile,
+    get_weather,
+    # Bookmarks
+    save_bookmark,
+    list_reading_list,
+    mark_read,
+    remove_bookmark,
+    search_reading_list,
+    # Mood
+    log_mood,
+    show_mood_history,
+    mood_summary,
+    # Scheduling
+    find_free_slot,
+    # Code
+    run_python_code,
+    run_shell_command,
+    # Web
+    web_search,
+    fetch_url,
+    # Files
+    send_file,
+    # Interests
+    add_interest,
+    list_interests,
+    remove_interest,
+    update_interest_tool,
+    # Beads
+    beads_create,
+    beads_list,
+    beads_ready,
+    # Memory
+    save_memory,
+    recall_memory,
+    list_memories,
+    forget_memory,
+]
+
+
+# ---------------------------------------------------------------------------
+# Agent / Team state
+# ---------------------------------------------------------------------------
+
+AGENT_TIMEOUT = 1200  # 20 minutes
+
+_team: Team | None = None
+_mcp_tools: list[Any] = []
+_db = SqliteDb(
+    session_table="agno_sessions",
+    db_file=str(settings.database_path),
 )
 
-
-def _get_external_mcp_servers() -> dict[str, Any]:
-    """Return MCP server configs for external servers (Playwright, Beads, user-configured)."""
-    servers: dict[str, Any] = {}
-
-    # Playwright (headless browser)
-    servers["playwright"] = {
-        "command": "npx",
-        "args": ["@playwright/mcp@latest", "--headless"],
-    }
-
-    # Beads (task tracking)
-    servers["beads"] = {
-        "command": "uvx",
-        "args": ["beads-mcp"],
-    }
-
-    # User-configured MCP servers
-    for i, cmd in enumerate(settings.mcp_server_commands):
-        parts = cmd.split()
-        if parts:
-            servers[f"custom_{i}"] = {
-                "command": parts[0],
-                "args": parts[1:],
-            }
-
-    return servers
-
-
-# ---------------------------------------------------------------------------
-# Agent state
-# ---------------------------------------------------------------------------
-
-_session_id: str | None = None
-
-# Maximum wall-clock time for a single chat/stream invocation (seconds).
-SDK_TIMEOUT = 1200  # 20 minutes
+SESSION_ID = "minion-main"
 
 
 def _build_system_prompt(format_hint: str) -> str:
@@ -258,9 +442,37 @@ def _build_system_prompt(format_hint: str) -> str:
     return "\n\n".join(parts)
 
 
-def _build_allowed_tools() -> list[str]:
-    """Build the list of allowed tool names for the SDK."""
-    return [f"mcp__minion-tools__{t.name}" for t in MAIN_TOOLS]
+def set_mcp_tools(tools: list[Any]) -> None:
+    """Set MCP tools to be included in the agent. Called from main.py after MCP init."""
+    global _mcp_tools, _team
+    _mcp_tools = tools
+    _team = None  # force rebuild on next call
+
+
+def _get_team(format_hint: str) -> Team:
+    """Lazy-create (or rebuild) the Agno Team."""
+    global _team
+
+    all_tools = MAIN_TOOLS + _mcp_tools
+
+    members = build_team_members()
+
+    _team = Team(
+        name="Minion",
+        mode=TeamMode.coordinate,
+        model=OpenAIChat(id=settings.agent_model, api_key=settings.openai_api_key),
+        members=members,  # type: ignore[arg-type]
+        tools=all_tools,
+        instructions=[_build_system_prompt(format_hint)],
+        db=_db,
+        num_history_runs=5,
+        add_history_to_context=True,
+        show_members_responses=True,
+        markdown=format_hint == "web",
+        telemetry=False,
+    )
+
+    return _team
 
 
 async def chat(message: str, format_hint: str = "telegram") -> str:
@@ -270,58 +482,25 @@ async def chat(message: str, format_hint: str = "telegram") -> str:
         message: User message text.
         format_hint: "telegram" for HTML formatting, "web" for Markdown.
     """
-    global _session_id
-
     logger.info(f"Chat input: {message[:100]}{'...' if len(message) > 100 else ''}")
 
-    mcp_servers: dict[str, Any] = {"tools": _tools_server}
-
-    # Add external MCP servers
-    try:
-        mcp_servers.update(_get_external_mcp_servers())
-    except Exception as e:
-        logger.warning(f"Failed to configure external MCP servers: {e}")
-
-    options = ClaudeAgentOptions(
-        model=settings.agent_model,
-        system_prompt=_build_system_prompt(format_hint),
-        mcp_servers=mcp_servers,
-        allowed_tools=_build_allowed_tools(),
-        agents=SUBAGENTS,
-        permission_mode="bypassPermissions",
-        max_turns=20,
-        env={
-            "ANTHROPIC_BASE_URL": settings.anthropic_base_url,
-            "ANTHROPIC_API_KEY": settings.anthropic_api_key,
-        },
-    )
-
-    # Resume previous session if available
-    if _session_id:
-        options.resume = _session_id
+    team = _get_team(format_hint)
 
     response_text = ""
-
     try:
-        async with asyncio.timeout(SDK_TIMEOUT):
-            async with ClaudeSDKClient(options=options) as client:
-                await client.query(message)
-                async for msg in client.receive_response():
-                    if isinstance(msg, AssistantMessage):
-                        for block in msg.content:
-                            if isinstance(block, TextBlock):
-                                response_text += block.text
-                    elif isinstance(msg, ResultMessage):
-                        _session_id = msg.session_id
-                        logger.info(f"Session {_session_id}: {msg.num_turns} turns, ${msg.total_cost_usd:.4f}")
-                        break
+        async with asyncio.timeout(AGENT_TIMEOUT):
+            response = await team.arun(
+                message,
+                session_id=SESSION_ID,
+                stream=False,
+            )
+            if response and response.content:
+                response_text = response.content
     except TimeoutError:
-        logger.error("chat() timed out after %d seconds — resetting session (was %s)", SDK_TIMEOUT, _session_id)
-        _session_id = None
-        raise TimeoutError(f"Agent timed out after {SDK_TIMEOUT // 60} minutes") from None
-    except Exception as e:
-        logger.exception("chat() error — resetting session (was %s): %s", _session_id, e)
-        _session_id = None
+        logger.error("chat() timed out after %d seconds", AGENT_TIMEOUT)
+        raise TimeoutError(f"Agent timed out after {AGENT_TIMEOUT // 60} minutes") from None
+    except Exception:
+        logger.exception("chat() error")
         raise
 
     if not response_text.strip():
@@ -344,78 +523,68 @@ async def chat_stream(message: str, format_hint: str = "telegram"):
     Event types:
         ("text", str)       — final response text chunk
         ("tool_call", str)  — name of tool being invoked
-        ("thinking", str)   — reasoning snippet (≤100 chars)
-        ("result", str)     — stream complete, data is session_id
+        ("thinking", str)   — reasoning snippet
+        ("result", str)     — stream complete
 
     Args:
         message: User message text.
         format_hint: "telegram" for HTML formatting, "web" for Markdown.
     """
-    global _session_id
-
     logger.info(f"Chat stream input: {message[:100]}{'...' if len(message) > 100 else ''}")
 
-    mcp_servers: dict[str, Any] = {"tools": _tools_server}
-    try:
-        mcp_servers.update(_get_external_mcp_servers())
-    except Exception as e:
-        logger.warning(f"Failed to configure external MCP servers: {e}")
-
-    options = ClaudeAgentOptions(
-        model=settings.agent_model,
-        system_prompt=_build_system_prompt(format_hint),
-        mcp_servers=mcp_servers,
-        allowed_tools=_build_allowed_tools(),
-        agents=SUBAGENTS,
-        permission_mode="bypassPermissions",
-        max_turns=20,
-        env={
-            "ANTHROPIC_BASE_URL": settings.anthropic_base_url,
-            "ANTHROPIC_API_KEY": settings.anthropic_api_key,
-        },
-    )
-
-    if _session_id:
-        options.resume = _session_id
+    team = _get_team(format_hint)
+    full_text = ""
 
     try:
-        async with ClaudeSDKClient(options=options) as client:
-            await client.query(message)
-            async for msg in client.receive_response():
-                if isinstance(msg, AssistantMessage):
-                    for block in msg.content:
-                        if isinstance(block, TextBlock):
-                            yield ("text", block.text)
-                        elif isinstance(block, ToolUseBlock):
-                            yield ("tool_call", block.name)
-                        elif isinstance(block, ThinkingBlock):
-                            yield ("thinking", block.thinking or "")
-                elif isinstance(msg, ResultMessage):
-                    _session_id = msg.session_id
-                    yield ("result", msg.session_id or "")
-                    break
+        async for event in team.arun(
+            message,
+            session_id=SESSION_ID,
+            stream=True,
+            stream_events=True,
+        ):
+            # Team final content
+            if event.event == TeamRunEvent.run_content:
+                chunk = event.content or ""
+                if chunk:
+                    full_text += chunk
+                    yield ("text", chunk)
+
+            # Team-level tool call
+            elif event.event == TeamRunEvent.tool_call_started:
+                tool_obj = getattr(event, "tool", None)
+                tool_name = tool_obj.tool_name if tool_obj else "unknown"
+                yield ("tool_call", tool_name)
+
+            # Member-level tool call
+            elif event.event == RunEvent.tool_call_started:
+                tool_obj = getattr(event, "tool", None)
+                tool_name = tool_obj.tool_name if tool_obj else "unknown"
+                agent_id = getattr(event, "agent_id", "")
+                label = f"{agent_id}: {tool_name}" if agent_id else tool_name
+                yield ("tool_call", label)
+
+            # Team run completed
+            elif event.event == TeamRunEvent.run_completed:
+                yield ("result", "")
+
     except GeneratorExit:
-        logger.info("chat_stream GeneratorExit — resetting session (was %s)", _session_id)
-        _session_id = None
+        logger.info("chat_stream GeneratorExit")
         return
-    except RuntimeError as exc:
-        if "cancel scope" in str(exc):
-            # SDK cleanup fails when anyio cancel scope crosses task boundaries
-            # during async generator close. Harmless — suppress it.
-            logger.info("chat_stream cancel scope cleanup — resetting session (was %s)", _session_id)
-            _session_id = None
-            return
-        logger.exception("chat_stream RuntimeError — resetting session (was %s)", _session_id)
-        _session_id = None
-        raise
     except Exception:
-        logger.exception("chat_stream error — resetting session (was %s)", _session_id)
-        _session_id = None
+        logger.exception("chat_stream error")
         raise
+
+    # Log to event bus
+    if full_text:
+        try:
+            with session_scope() as session:
+                log_agent_event(session, "chat_stream", "agent_response", full_text[:500])
+        except Exception:
+            logger.debug("Failed to log agent response to event bus", exc_info=True)
 
 
 async def shutdown() -> None:
-    """Reset session state."""
-    global _session_id
-    _session_id = None
-    logger.info("SDK agent session cleared")
+    """Clean up agent state."""
+    global _team
+    _team = None
+    logger.info("Agno agent cleaned up")

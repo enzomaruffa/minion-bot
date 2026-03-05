@@ -13,7 +13,7 @@ from telegram.ext import (
     filters,
 )
 
-from src.agent import SDK_TIMEOUT, chat, chat_stream
+from src.agent import AGENT_TIMEOUT, chat, chat_stream
 from src.config import settings
 from src.db import session_scope
 from src.db.queries import log_agent_event
@@ -145,7 +145,7 @@ async def _handle_streaming_message(update: Update, user_message: str) -> None:
                 pass
 
     try:
-        async with asyncio.timeout(SDK_TIMEOUT):
+        async with asyncio.timeout(AGENT_TIMEOUT):
             async for event_type, data in chat_stream(user_message):
                 if event_type == "tool_call":
                     # Strip mcp server prefix for readability
@@ -173,7 +173,7 @@ async def _handle_streaming_message(update: Update, user_message: str) -> None:
         text = accumulated.strip() or "Done."
         await safe_reply(message, text)
     except TimeoutError:
-        logger.error("Streaming timed out after %d seconds, accumulated %d chars", SDK_TIMEOUT, len(accumulated))
+        logger.error("Streaming timed out after %d seconds, accumulated %d chars", AGENT_TIMEOUT, len(accumulated))
         if status_msg:
             with contextlib.suppress(Exception):
                 await status_msg.delete()

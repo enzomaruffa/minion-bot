@@ -3,7 +3,6 @@
 import logging
 from datetime import datetime
 
-from src.agent.subagents import SUBAGENTS
 from src.agent.tools.agenda import get_agenda
 from src.agent.tools.mood import show_mood_history
 from src.agent.tools.profile import get_weather
@@ -44,16 +43,7 @@ WHAT YOU CAN DO:
 2. HELP WITH TASKS — compare prices for shopping items, research for tasks, draft notes
 3. PLAN — suggest scheduling, break down complex tasks, suggest next steps
 4. NOTIFY — send concise, actionable messages to the user via send_proactive_notification
-5. DELEGATE TO SUBAGENTS — you have specialized subagents for deep work:
-   - researcher: web research, price comparison, news gathering
-   - planner: daily/weekly planning, schedule optimization
-   - task-breakdown: decompose complex tasks into subtasks
-   - content-creator: draft notes, lesson plans, checklists
-   - shopping-scout: product research, deal finding
-   - social-manager: birthday prep, gift ideas
-   - analyst: mood trends, productivity reports
-   Prefer subagents over doing shallow work yourself — they do deeper, focused work.
-6. TRACK WORK — use beads_create/beads_list to track sub-tasks
+5. TRACK WORK — use beads_create/beads_list to track sub-tasks
 
 RULES:
 - Max {max_notifications} notifications per run
@@ -202,51 +192,67 @@ def _build_recent_actions() -> str:
         return "\n".join(lines)
 
 
-async def _run_heartbeat_sdk(prompt: str) -> str | None:
-    """Run a heartbeat cycle using the Claude Agent SDK."""
-    from claude_agent_sdk import (
-        AssistantMessage,
-        ClaudeAgentOptions,
-        ClaudeSDKClient,
-        ResultMessage,
-        TextBlock,
-        create_sdk_mcp_server,
+async def _run_heartbeat_agno(prompt: str) -> str | None:
+    """Run a heartbeat cycle using an Agno Agent."""
+    from agno.agent import Agent
+    from agno.models.openai import OpenAIChat
+
+    from src.agent.tools import (
+        beads_create,
+        beads_list,
+        beads_ready,
+        check_dedup,
+        delegate_research,
+        delegate_task_work,
+        fetch_url,
+        get_agenda,
+        get_current_datetime,
+        get_overdue_tasks,
+        get_weather,
+        list_interests,
+        list_tasks,
+        log_heartbeat_action,
+        run_python_code,
+        run_shell_command,
+        send_proactive_notification,
+        show_mood_history,
+        task_nudge_dedup_key,
+        web_search,
     )
 
-    from src.agent.sdk_tools import HEARTBEAT_TOOLS
+    heartbeat_tools = [
+        get_current_datetime,
+        get_agenda,
+        get_overdue_tasks,
+        list_tasks,
+        get_weather,
+        show_mood_history,
+        list_interests,
+        web_search,
+        fetch_url,
+        run_python_code,
+        run_shell_command,
+        beads_create,
+        beads_list,
+        beads_ready,
+        check_dedup,
+        log_heartbeat_action,
+        send_proactive_notification,
+        delegate_research,
+        delegate_task_work,
+        task_nudge_dedup_key,
+    ]
 
-    heartbeat_server = create_sdk_mcp_server(
-        name="heartbeat-tools",
-        version="1.0.0",
-        tools=HEARTBEAT_TOOLS,
+    agent = Agent(
+        name="Heartbeat",
+        model=OpenAIChat(id=settings.heartbeat_model, api_key=settings.openai_api_key),
+        tools=heartbeat_tools,
+        instructions=[prompt],
+        telemetry=False,
     )
 
-    options = ClaudeAgentOptions(
-        model=settings.heartbeat_model,
-        system_prompt=prompt,
-        mcp_servers={"hb": heartbeat_server},
-        allowed_tools=[f"mcp__hb__{t.name}" for t in HEARTBEAT_TOOLS],
-        agents=SUBAGENTS,
-        permission_mode="bypassPermissions",
-        max_turns=15,
-        env={
-            "ANTHROPIC_BASE_URL": settings.anthropic_base_url,
-            "ANTHROPIC_API_KEY": settings.anthropic_api_key,
-        },
-    )
-
-    response_text = ""
-    async with ClaudeSDKClient(options=options) as client:
-        await client.query(prompt)
-        async for msg in client.receive_response():
-            if isinstance(msg, AssistantMessage):
-                for block in msg.content:
-                    if isinstance(block, TextBlock):
-                        response_text += block.text
-            elif isinstance(msg, ResultMessage):
-                break
-
-    return response_text or None
+    response = await agent.arun(prompt)
+    return response.content if response and response.content else None
 
 
 async def run_heartbeat() -> None:
@@ -271,7 +277,7 @@ async def run_heartbeat() -> None:
             quiet_hours_note=quiet_hours_note,
         )
 
-        response_content = await _run_heartbeat_sdk(prompt)
+        response_content = await _run_heartbeat_agno(prompt)
 
         # Mark checked interests as checked
         with session_scope() as session:

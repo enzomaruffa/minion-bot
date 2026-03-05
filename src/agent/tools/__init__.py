@@ -40,12 +40,14 @@ from .contacts import (  # noqa: E402
     upcoming_birthdays,
     update_contact_tool,
 )
+from .files import send_file  # noqa: E402
 from .heartbeat_tools import (  # noqa: E402
     check_dedup,
     delegate_research,
     delegate_task_work,
     log_heartbeat_action,
     send_proactive_notification,
+    task_nudge_dedup_key,
 )
 from .interests import (  # noqa: E402
     add_interest,
@@ -53,6 +55,7 @@ from .interests import (  # noqa: E402
     remove_interest,
     update_interest_tool,
 )
+from .memory import forget_memory, list_memories, recall_memory, save_memory  # noqa: E402
 from .mood import log_mood, mood_summary, show_mood_history  # noqa: E402
 from .notes import (  # noqa: E402
     append_to_note_tool,
@@ -204,4 +207,12 @@ __all__ = [
     "send_proactive_notification",
     "delegate_research",
     "delegate_task_work",
+    "task_nudge_dedup_key",
+    # File tools
+    "send_file",
+    # Memory tools
+    "save_memory",
+    "recall_memory",
+    "list_memories",
+    "forget_memory",
 ]

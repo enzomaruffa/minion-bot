@@ -27,7 +27,7 @@ async def _agent_compose(prompt: str) -> str | None:
     Returns None if the agent call fails (caller should use fallback).
     """
     try:
-        from src.agent.sdk_agent import chat
+        from src.agent import chat
 
         return await chat(prompt, format_hint="telegram")
     except Exception:

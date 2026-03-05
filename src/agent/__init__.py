@@ -1,3 +1,3 @@
-from src.agent.sdk_agent import SDK_TIMEOUT, chat, chat_stream, shutdown
+from src.agent.agent import AGENT_TIMEOUT, chat, chat_stream, shutdown
 
-__all__ = ["SDK_TIMEOUT", "chat", "chat_stream", "shutdown"]
+__all__ = ["AGENT_TIMEOUT", "chat", "chat_stream", "shutdown"]

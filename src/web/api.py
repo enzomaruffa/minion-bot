@@ -790,10 +790,17 @@ async def api_chat_stream(body: ChatRequest):
             from src.agent import chat
 
             response = await chat(body.message, format_hint="web")
-            yield f"data: {json.dumps({'text': response})}\n\n"
+            yield f"data: {json.dumps({'type': 'text', 'text': response})}\n\n"
         else:
-            async for chunk in chat_stream(body.message, format_hint="web"):
-                yield f"data: {json.dumps({'text': chunk})}\n\n"
+            async for event_type, data in chat_stream(body.message, format_hint="web"):
+                if event_type == "text":
+                    yield f"data: {json.dumps({'type': 'text', 'text': data})}\n\n"
+                elif event_type == "tool_call":
+                    yield f"data: {json.dumps({'type': 'tool_call', 'name': data})}\n\n"
+                elif event_type == "thinking":
+                    yield f"data: {json.dumps({'type': 'thinking', 'text': data})}\n\n"
+                elif event_type == "result":
+                    break
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")

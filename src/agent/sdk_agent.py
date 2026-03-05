@@ -17,6 +17,8 @@ from claude_agent_sdk import (
     ClaudeSDKClient,
     ResultMessage,
     TextBlock,
+    ThinkingBlock,
+    ToolUseBlock,
     create_sdk_mcp_server,
 )
 
@@ -327,7 +329,13 @@ async def chat(message: str, format_hint: str = "telegram") -> str:
 
 
 async def chat_stream(message: str, format_hint: str = "telegram"):
-    """Streaming version of chat — yields text chunks as they arrive.
+    """Streaming version of chat — yields (event_type, data) tuples.
+
+    Event types:
+        ("text", str)       — final response text chunk
+        ("tool_call", str)  — name of tool being invoked
+        ("thinking", str)   — reasoning snippet (≤100 chars)
+        ("result", str)     — stream complete, data is session_id
 
     Args:
         message: User message text.
@@ -366,9 +374,14 @@ async def chat_stream(message: str, format_hint: str = "telegram"):
             if isinstance(msg, AssistantMessage):
                 for block in msg.content:
                     if isinstance(block, TextBlock):
-                        yield block.text
+                        yield ("text", block.text)
+                    elif isinstance(block, ToolUseBlock):
+                        yield ("tool_call", block.name)
+                    elif isinstance(block, ThinkingBlock):
+                        yield ("thinking", block.thinking[:100] if block.thinking else "")
             elif isinstance(msg, ResultMessage):
                 _session_id = msg.session_id
+                yield ("result", msg.session_id or "")
                 break
 
 

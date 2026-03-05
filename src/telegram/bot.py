@@ -112,71 +112,71 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 
 async def _handle_streaming_message(update: Update, user_message: str) -> None:
-    """Handle a message with streaming response (progressive edits)."""
+    """Handle a message with streaming response.
+
+    Two-phase approach:
+    1. Status message (italic) — shows tool calls and thinking as they happen
+    2. Final response — deletes status, sends the real answer
+    """
+    import contextlib
+
     assert update.message  # guaranteed by caller
-    placeholder = None
+    message = update.message
+    status_msg = None
+    status_lines: list[str] = []
     accumulated = ""
     last_edit = 0.0
+    _MAX_STATUS_LINES = 6
+
+    async def _update_status() -> None:
+        """Create or edit the italic status message."""
+        nonlocal status_msg, last_edit
+        now = _time.time()
+        display = "<i>" + "\n".join(status_lines[-_MAX_STATUS_LINES:]) + "</i>"
+        if status_msg is None:
+            status_msg = await message.reply_text(display, parse_mode="HTML")
+            last_edit = now
+        elif now - last_edit >= 1.5:
+            try:
+                await status_msg.edit_text(display, parse_mode="HTML")
+                last_edit = now
+            except BadRequest:
+                pass
 
     try:
-        async for chunk in chat_stream(user_message):
-            accumulated += chunk
-            # Send first message once we have real text (no "..." placeholder)
-            if placeholder is None and len(accumulated) > 3:
-                placeholder = await update.message.reply_text(accumulated + " ...")
-                last_edit = _time.time()
-                continue
-            if placeholder is None:
-                continue
-            now = _time.time()
-            # Rate-limit edits to every 1.5 seconds to avoid Telegram API throttle
-            if now - last_edit >= 1.5:
-                try:
-                    display = accumulated[:4000] + " ..." if len(accumulated) > 4000 else accumulated + " ..."
-                    await placeholder.edit_text(display)
-                    last_edit = now
-                except BadRequest:
-                    pass  # Edit can fail if text is unchanged
+        async for event_type, data in chat_stream(user_message):
+            if event_type == "tool_call":
+                # Strip mcp server prefix for readability
+                name = data.split("__")[-1] if "__" in data else data
+                status_lines.append(f"\U0001f527 {name}")
+                await _update_status()
 
-        # Final edit with the complete response
-        if placeholder is None:
-            # Never got a placeholder — send the full response (or fallback)
-            text = accumulated.strip() or "Done."
-            await safe_reply(update.message, text)
-        elif accumulated.strip():
-            import contextlib
+            elif event_type == "thinking":
+                if data:
+                    status_lines.append(f"\U0001f4ad {data[:80]}")
+                    await _update_status()
 
-            if len(accumulated) > 4096:
-                # Too long for a single edit — delete placeholder and chunk-send
-                with contextlib.suppress(Exception):
-                    await placeholder.delete()
-                await safe_reply(update.message, accumulated)
-            else:
-                try:
-                    await placeholder.edit_text(accumulated, parse_mode="HTML")
-                except BadRequest:
-                    # HTML parse failed — try plain text
-                    with contextlib.suppress(BadRequest):
-                        await placeholder.edit_text(accumulated)
-        else:
-            await placeholder.edit_text("Done.")
+            elif event_type == "text":
+                accumulated += data
+
+            elif event_type == "result":
+                break
+
+        # Delete status message
+        if status_msg:
+            with contextlib.suppress(Exception):
+                await status_msg.delete()
+
+        # Send final response
+        text = accumulated.strip() or "Done."
+        await safe_reply(message, text)
     except Exception:
         logger.exception("Streaming error, falling back to non-streaming")
+        if status_msg:
+            with contextlib.suppress(Exception):
+                await status_msg.delete()
         response = await chat(user_message)
-        if placeholder:
-            import contextlib
-
-            if len(response) > 4096:
-                with contextlib.suppress(Exception):
-                    await placeholder.delete()
-                await safe_reply(update.message, response)
-            else:
-                try:
-                    await placeholder.edit_text(response, parse_mode="HTML")
-                except BadRequest:
-                    await placeholder.edit_text(response)
-        else:
-            await safe_reply(update.message, response)
+        await safe_reply(message, response)
 
 
 @require_auth

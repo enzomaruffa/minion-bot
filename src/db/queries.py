@@ -1438,6 +1438,9 @@ def log_agent_event(
     """Log an event to the shared event bus."""
     import json
 
+    # Strip null bytes — they corrupt the system prompt and crash subprocess spawn
+    summary = summary.replace("\x00", "")
+
     event = AgentEvent(
         source=source,
         event_type=event_type,

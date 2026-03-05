@@ -58,6 +58,13 @@ RULES:
 - Log EVERY action with log_heartbeat_action (even "skip")
 - Do NOT notify unless you have something genuinely useful to share
 
+7. MEMORY MAINTENANCE — call list_memories() and review for:
+   - Duplicates (same fact, different keys) → keep newest, forget_memory the older
+   - Contradictions (old preference overridden by recent activity) → save_memory to update
+   - Stale facts (dates passed, tasks completed, no longer relevant) → forget_memory
+   - Important patterns from recent activity not yet saved → save_memory
+   Only do light cleanup each run (max 3 memory ops). Don't obsess over it.
+
 {quiet_hours_note}
 """
 
@@ -205,15 +212,19 @@ async def _run_heartbeat_agno(prompt: str) -> str | None:
         delegate_research,
         delegate_task_work,
         fetch_url,
+        forget_memory,
         get_agenda,
         get_current_datetime,
         get_overdue_tasks,
         get_weather,
         list_interests,
+        list_memories,
         list_tasks,
         log_heartbeat_action,
+        recall_memory,
         run_python_code,
         run_shell_command,
+        save_memory,
         send_proactive_notification,
         show_mood_history,
         task_nudge_dedup_key,
@@ -241,6 +252,11 @@ async def _run_heartbeat_agno(prompt: str) -> str | None:
         delegate_research,
         delegate_task_work,
         task_nudge_dedup_key,
+        # Memory tools for consolidation
+        save_memory,
+        recall_memory,
+        list_memories,
+        forget_memory,
     ]
 
     agent = Agent(

@@ -14,6 +14,7 @@ from typing import Any
 from agno.agent import RunEvent
 from agno.db.sqlite import SqliteDb
 from agno.models.openai import OpenAIChat
+from agno.session.summary import SessionSummaryManager
 from agno.team import Team, TeamRunEvent
 from agno.team.team import TeamMode
 
@@ -382,6 +383,9 @@ _db = SqliteDb(
     session_table="agno_sessions",
     db_file=str(settings.database_path),
 )
+_summary_manager = SessionSummaryManager(
+    model=OpenAIChat(id="gpt-5-mini", api_key=settings.openai_api_key),
+)
 
 SESSION_ID = "minion-main"
 
@@ -470,6 +474,8 @@ def _get_team(format_hint: str) -> Team:
         add_history_to_context=True,
         show_members_responses=True,
         markdown=format_hint == "web",
+        enable_session_summaries=True,
+        session_summary_manager=_summary_manager,
         telemetry=False,
     )
 

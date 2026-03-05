@@ -395,12 +395,19 @@ async def chat_stream(message: str, format_hint: str = "telegram"):
                     yield ("result", msg.session_id or "")
                     break
     except GeneratorExit:
-        # Consumer stopped iterating (e.g. break after "result").
-        # SDK cleanup can fail with RuntimeError when anyio cancel scopes
-        # cross task boundaries — suppress it to avoid killing the response.
-        logger.warning("chat_stream GeneratorExit — resetting session (was %s)", _session_id)
+        logger.info("chat_stream GeneratorExit — resetting session (was %s)", _session_id)
         _session_id = None
         return
+    except RuntimeError as exc:
+        if "cancel scope" in str(exc):
+            # SDK cleanup fails when anyio cancel scope crosses task boundaries
+            # during async generator close. Harmless — suppress it.
+            logger.info("chat_stream cancel scope cleanup — resetting session (was %s)", _session_id)
+            _session_id = None
+            return
+        logger.exception("chat_stream RuntimeError — resetting session (was %s)", _session_id)
+        _session_id = None
+        raise
     except Exception:
         logger.exception("chat_stream error — resetting session (was %s)", _session_id)
         _session_id = None

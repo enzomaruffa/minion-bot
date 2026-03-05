@@ -803,7 +803,7 @@ async def api_chat_stream(body: ChatRequest):
                         elif event_type == "thinking":
                             yield f"data: {json.dumps({'type': 'thinking', 'text': data})}\n\n"
                         elif event_type == "result":
-                            break
+                            pass  # generator ends naturally after this
             except TimeoutError:
                 logger.error("SSE stream timed out after %d seconds", SDK_TIMEOUT)
                 yield f"data: {json.dumps({'type': 'error', 'text': 'Request timed out (20 min limit)'})}\n\n"

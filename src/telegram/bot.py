@@ -162,7 +162,7 @@ async def _handle_streaming_message(update: Update, user_message: str) -> None:
                     accumulated += data
 
                 elif event_type == "result":
-                    break
+                    pass  # generator ends naturally after this
 
         # Delete status message
         if status_msg:

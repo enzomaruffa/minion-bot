@@ -38,6 +38,7 @@ class Settings:
     heartbeat_model: str
     heartbeat_enabled: bool
     heartbeat_max_notifications: int
+    heartbeat_daily_cap: int
     # MCP server commands
     mcp_server_commands: list[str]
 
@@ -83,7 +84,8 @@ class Settings:
         heartbeat_interval_minutes = int(os.environ.get("HEARTBEAT_INTERVAL_MINUTES", "60"))
         heartbeat_model = os.environ.get("HEARTBEAT_MODEL", "gpt-5-mini")
         heartbeat_enabled = os.environ.get("HEARTBEAT_ENABLED", "true").lower() == "true"
-        heartbeat_max_notifications = int(os.environ.get("HEARTBEAT_MAX_NOTIFICATIONS", "3"))
+        heartbeat_max_notifications = int(os.environ.get("HEARTBEAT_MAX_NOTIFICATIONS", "1"))
+        heartbeat_daily_cap = int(os.environ.get("HEARTBEAT_DAILY_CAP", "3"))
 
         # MCP server commands (comma-separated)
         mcp_cmds = os.environ.get("MCP_SERVER_COMMANDS", "")
@@ -111,6 +113,7 @@ class Settings:
             heartbeat_model=heartbeat_model,
             heartbeat_enabled=heartbeat_enabled,
             heartbeat_max_notifications=heartbeat_max_notifications,
+            heartbeat_daily_cap=heartbeat_daily_cap,
             mcp_server_commands=mcp_server_commands,
         )
 

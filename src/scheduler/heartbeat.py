@@ -29,6 +29,8 @@ logger = logging.getLogger(__name__)
 HEARTBEAT_PROMPT = """You are Minion in PROACTIVE mode. The user did NOT message you.
 Think about what would GENUINELY help the user right now.
 
+LANGUAGE: Always write in English — never Portuguese or any other language.
+
 CURRENT STATE:
 {context}
 
@@ -47,9 +49,16 @@ WHAT YOU CAN DO:
 
 RULES:
 - Max {max_notifications} notifications per run
-- ALWAYS check_dedup before notifying (skip if sent within interval)
-- For overdue task nudges, use task_nudge_dedup_key(task_id) to get the correct dedup key format ("task_nudge_{{ID}}")
-- Do NOT nag about the same task more than once per 24h — if already in recent actions, SKIP
+- Daily cap: {daily_cap} total. Already sent today: {daily_notifications_sent}.
+  If at or over cap, send NOTHING this run.
+- ALWAYS call check_dedup before notifying — if it returns "duplicate",
+  call log_heartbeat_action with action_type="skip" and move on. NEVER rephrase and resend.
+- RECENT HEARTBEAT ACTIONS above lists what you already sent. If ANY [notified] entry
+  in the last 24h covers the same task or topic, SKIP — do not rephrase and resend.
+- For overdue task nudges: the ONLY valid dedup key is "task_nudge_{{task_id}}".
+  Call task_nudge_dedup_key(task_id) to get it. Never invent ad-hoc keys like "Naomi_gift".
+- Only notify if you have NEW information (price found, stock confirmed, date changed)
+  — not just because a task is still overdue.
 - Prefer actionable help (research, price comparison, prep work) over "this is overdue" reminders
 - High-priority interests first
 - Be concise — user is busy
@@ -285,11 +294,23 @@ async def run_heartbeat() -> None:
 
         quiet_hours_note = _get_quiet_hours_note()
 
+        # Count notifications already sent in the last 24h for the daily cap
+        with session_scope() as session:
+            from datetime import UTC, timedelta
+
+            cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=24)
+            all_recent = list_recent_heartbeat_logs(session, limit=200)
+            daily_notifications_sent = sum(
+                1 for log in all_recent if log.notified and log.created_at and log.created_at >= cutoff
+            )
+
         prompt = HEARTBEAT_PROMPT.format(
             context=context,
             interests=interests,
             recent_actions=recent_actions,
             max_notifications=settings.heartbeat_max_notifications,
+            daily_cap=settings.heartbeat_daily_cap,
+            daily_notifications_sent=daily_notifications_sent,
             quiet_hours_note=quiet_hours_note,
         )
 

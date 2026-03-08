@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Optional
 
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import ForeignKey, Index, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -265,6 +265,7 @@ class HeartbeatLog(Base):
     """Log of heartbeat agent actions for audit and dedup."""
 
     __tablename__ = "heartbeat_logs"
+    __table_args__ = (Index("ix_heartbeat_log_dedup_created", "dedup_key", "created_at"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     dedup_key: Mapped[str] = mapped_column(String(255), index=True)

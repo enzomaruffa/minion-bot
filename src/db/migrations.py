@@ -630,3 +630,24 @@ MIGRATIONS.append(
         _017_agent_event_bus,
     )
 )
+
+
+# ── Migration 018: Composite index on heartbeat_logs ─────────────────────────
+
+
+def _018_heartbeat_composite_index(session: Session) -> None:
+    """Add composite index (dedup_key, created_at) to heartbeat_logs."""
+    session.execute(
+        text("CREATE INDEX IF NOT EXISTS ix_heartbeat_log_dedup_created ON heartbeat_logs (dedup_key, created_at)")
+    )
+    session.flush()
+    logger.info("Created composite index ix_heartbeat_log_dedup_created")
+
+
+MIGRATIONS.append(
+    (
+        "018_heartbeat_composite_index",
+        "Add composite index on heartbeat_logs(dedup_key, created_at) for dedup queries",
+        _018_heartbeat_composite_index,
+    )
+)

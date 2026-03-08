@@ -402,7 +402,8 @@ async def notify_error(tool_name: str, error: Exception, error_id: str | None = 
     # Rate limit by tool name
     now = datetime.now()
     if len(_last_error_notification) > _MAX_ERROR_ENTRIES:
-        _last_error_notification.clear()
+        oldest_key = next(iter(_last_error_notification))
+        del _last_error_notification[oldest_key]
     if tool_name in _last_error_notification:
         elapsed = (now - _last_error_notification[tool_name]).total_seconds()
         if elapsed < _ERROR_RATE_LIMIT_SECONDS:

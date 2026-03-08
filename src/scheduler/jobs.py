@@ -223,14 +223,19 @@ async def sync_calendar() -> None:
         logger.exception(f"Error in calendar sync job: {e}")
 
 
-def _get_next_occurrence(rrule_str: str, after: datetime) -> datetime | None:
-    """Calculate next occurrence from an RRULE string after a given date."""
+def _get_next_occurrence(rrule_str: str, after: datetime, now: datetime | None = None) -> datetime | None:
+    """Calculate next occurrence from an RRULE string after a given date.
+
+    When a task is completed late, pass ``now`` so the generated instance is
+    always in the future rather than still overdue.
+    """
     try:
         from dateutil.rrule import rrulestr
 
         rule = rrulestr(f"RRULE:{rrule_str}", dtstart=after)
-        next_dt = rule.after(after, inc=False)
-        return next_dt
+        # Skip any occurrences already in the past when task was completed late
+        cutoff = max(after, now) if now is not None else after
+        return rule.after(cutoff, inc=False)
     except Exception as e:
         logger.warning(f"Failed to parse RRULE '{rrule_str}': {e}")
         return None
@@ -243,12 +248,13 @@ async def generate_recurring_tasks() -> None:
         with session_scope() as session:
             tasks = list_completed_recurring_tasks(session)
             generated = 0
+            now = datetime.now(settings.timezone).replace(tzinfo=None)
 
             for task in tasks:
                 if not task.recurrence_rule:
                     continue
-                after = task.due_date or task.updated_at or datetime.now(settings.timezone).replace(tzinfo=None)
-                next_due = _get_next_occurrence(task.recurrence_rule, after)
+                after = task.due_date or task.updated_at or now
+                next_due = _get_next_occurrence(task.recurrence_rule, after, now=now)
 
                 if next_due:
                     new_task = create_next_recurring_instance(session, task, next_due)

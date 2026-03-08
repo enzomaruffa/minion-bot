@@ -129,6 +129,13 @@ from src.db.queries import log_agent_event
 logger = logging.getLogger(__name__)
 
 
+async def _safe_extract(user_message: str, assistant_response: str) -> None:
+    try:
+        await extract_memories_background(user_message, assistant_response)
+    except Exception:
+        logger.exception("Memory extraction failed silently")
+
+
 # ---------------------------------------------------------------------------
 # System prompt — format hints are inline, no separate formatter LLM pass
 # ---------------------------------------------------------------------------
@@ -521,7 +528,7 @@ async def chat(message: str, format_hint: str = "telegram") -> str:
         logger.debug("Failed to log agent response to event bus", exc_info=True)
 
     # Extract memories in background (fire-and-forget)
-    asyncio.create_task(extract_memories_background(message, response_text))
+    asyncio.create_task(_safe_extract(message, response_text))
 
     logger.info(f"Chat output: {response_text[:100]}{'...' if len(response_text) > 100 else ''}")
     return response_text
@@ -593,7 +600,7 @@ async def chat_stream(message: str, format_hint: str = "telegram"):
             logger.debug("Failed to log agent response to event bus", exc_info=True)
 
         # Extract memories in background (fire-and-forget)
-        asyncio.create_task(extract_memories_background(message, full_text))
+        asyncio.create_task(_safe_extract(message, full_text))
 
 
 async def shutdown() -> None:

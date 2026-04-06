@@ -32,15 +32,7 @@ def send_file(file_path: str, caption: str = "") -> str:
     try:
         from src.notifications import notify_file
 
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import concurrent.futures
-
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                future = pool.submit(asyncio.run, notify_file(file_path, caption))
-                future.result(timeout=30)
-        else:
-            asyncio.run(notify_file(file_path, caption))
+        asyncio.run(notify_file(file_path, caption))
     except Exception as e:
         logger.exception("Failed to send file")
         return f"Failed to send file: {e}"

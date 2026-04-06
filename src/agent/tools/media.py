@@ -107,17 +107,14 @@ def generate_video(
         Confirmation message after sending the generated video.
     """
     import asyncio
-    import concurrent.futures
 
     from src.integrations.media_gen import generate_video as _generate_video
 
     # Notify user about the wait
     try:
-        loop = asyncio.get_running_loop()
-        with concurrent.futures.ThreadPoolExecutor() as pool:
-            loop.run_in_executor(pool, lambda: asyncio.run(notify("Generating video, this may take a few minutes...")))
-    except RuntimeError:
         asyncio.run(notify("Generating video, this may take a few minutes..."))
+    except Exception:
+        logger.debug("Could not send video generation notification")
 
     try:
         path = _generate_video(

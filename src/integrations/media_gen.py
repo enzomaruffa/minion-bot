@@ -61,12 +61,13 @@ def _make_filename(prefix: str, ext: str, prompt: str) -> str:
     return f"{prefix}_{ts}_{short_hash}.{ext}"
 
 
-def generate_image_flash(prompt: str, input_image_path: str | None = None) -> str:
+def generate_image_flash(prompt: str, input_image_paths: list[str] | None = None) -> str:
     """Generate or edit an image using Nano Banana (gemini-2.5-flash-image).
 
     Args:
         prompt: Text prompt or editing instruction.
-        input_image_path: Optional path to source image for editing.
+        input_image_paths: Optional list of source image paths. Supports multiple
+            images for merging, compositing, or multi-reference editing.
 
     Returns:
         Path to saved output image.
@@ -76,9 +77,9 @@ def generate_image_flash(prompt: str, input_image_path: str | None = None) -> st
     client = _get_client()
     contents: list = []
 
-    if input_image_path:
-        img = Image.open(input_image_path)
-        contents.append(img)
+    if input_image_paths:
+        for path in input_image_paths:
+            contents.append(Image.open(path))
 
     contents.append(prompt)
 

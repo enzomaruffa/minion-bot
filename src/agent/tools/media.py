@@ -28,7 +28,8 @@ def generate_image(prompt: str, model: str = "flash", source_image_path: str = "
         if model == "imagen":
             path = generate_image_imagen(prompt)
         else:
-            path = generate_image_flash(prompt, input_image_path=source_image_path or None)
+            paths = [source_image_path] if source_image_path else None
+            path = generate_image_flash(prompt, input_image_paths=paths)
 
         caption = f"Generated: {prompt[:180]}"
         send_file(path, caption)
@@ -38,24 +39,31 @@ def generate_image(prompt: str, model: str = "flash", source_image_path: str = "
         return f"Image generation failed: {e}"
 
 
-def edit_image(image_path: str, instruction: str) -> str:
-    """Edit an existing image using natural language instructions.
+def edit_image(image_paths: str, instruction: str) -> str:
+    """Edit or combine images using natural language instructions.
 
-    Uses Nano Banana (Gemini) to understand the image and apply edits described in plain text.
-    No masks needed — just describe what you want changed.
+    Uses Nano Banana (Gemini) to understand images and apply edits described in plain text.
+    No masks needed — just describe what you want. Supports multiple input images for
+    merging, compositing, style transfer, or any multi-image operation.
 
     Args:
-        image_path: Absolute path to the image to edit.
+        image_paths: Absolute path(s) to image(s). Comma-separated for multiple images
+            (e.g., "/path/to/cat.jpg" or "/path/to/bg.jpg,/path/to/person.jpg").
         instruction: Natural language description of the desired edit (e.g., "remove the background",
-            "make it look like a watercolor painting", "add sunglasses to the person").
+            "merge these two images", "place the person from the second image onto the background
+            of the first image", "combine these in the style of a collage").
 
     Returns:
         Confirmation message after sending the edited image.
     """
     from src.integrations.media_gen import generate_image_flash
 
+    paths = [p.strip() for p in image_paths.split(",") if p.strip()]
+    if not paths:
+        return "No image paths provided."
+
     try:
-        path = generate_image_flash(instruction, input_image_path=image_path)
+        path = generate_image_flash(instruction, input_image_paths=paths)
         caption = f"Edited: {instruction[:180]}"
         send_file(path, caption)
         return f"Image edited and sent. Saved at {path}"

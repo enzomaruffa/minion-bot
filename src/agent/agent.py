@@ -228,6 +228,8 @@ MEDIA GENERATION:
     aspect_ratio (16:9/9:16), audio (on by default for veo-3+), negative_prompt
 When the user sends a photo with an editing instruction, use edit_image with the saved image path.
 When generating video, warn the user it takes a few minutes.
+If media generation fails, retry silently with a different model or simpler params.
+Do NOT present long option lists — just pick the best fallback and try again. Keep errors short.
 
 TASK IDs: Always prefixed with # (e.g., #5, #12). Use the exact numeric ID, not list position.
 

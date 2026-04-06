@@ -198,17 +198,20 @@ def generate_video(
     if not model_id:
         raise ValueError(f"Unknown video model '{model}'. Options: {', '.join(VEO_MODELS.keys())}")
 
-    # Build config
+    # Build config — only include params supported by the model
     config_kwargs: dict = {
         "aspect_ratio": aspect_ratio,
-        "resolution": resolution,
-        "duration_seconds": duration,
-        "enhance_prompt": enhance_prompt,
         "number_of_videos": 1,
     }
 
+    # resolution and duration_seconds are safe for all models
+    if resolution != "720p":
+        config_kwargs["resolution"] = resolution
+    if duration != 8:
+        config_kwargs["duration_seconds"] = duration
+
+    # enhance_prompt is not supported by all models — only include if explicitly set
     # Veo 3+ generates audio natively on Gemini API (always on, no param).
-    # Don't pass generate_audio — it's not a valid param on Gemini API.
 
     if negative_prompt:
         config_kwargs["negative_prompt"] = negative_prompt

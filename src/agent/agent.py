@@ -223,7 +223,7 @@ MEDIA GENERATION:
 - generate_image: text-to-image. model="flash" (fast, default) or "imagen" (high quality).
 - edit_image: send an image path + natural language instruction. No masks needed.
 - generate_video: text-to-video or image-to-video. Takes 1-5 minutes.
-  - Models: veo-2, veo-3, veo-3.1 (default), veo-3.1-fast, veo-3.1-lite
+  - Models: veo-2 (default, stable), veo-3, veo-3.1, veo-3.1-fast, veo-3.1-lite
   - Supports start_image_path, end_image_path (frame interpolation), duration, resolution (720p/1080p/4k),
     aspect_ratio (16:9/9:16), audio (on by default for veo-3+), negative_prompt
 When the user sends a photo with an editing instruction, use edit_image with the saved image path.

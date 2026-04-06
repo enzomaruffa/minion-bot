@@ -74,7 +74,7 @@ def edit_image(image_paths: str, instruction: str) -> str:
 
 def generate_video(
     prompt: str,
-    model: str = "veo-3.1",
+    model: str = "veo-2",
     start_image_path: str = "",
     end_image_path: str = "",
     duration: int = 8,

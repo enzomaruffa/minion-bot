@@ -99,7 +99,7 @@ def generate_video(
         resolution: Video resolution. "720p" (default, all models), "1080p" (Veo 3+, requires duration=8),
             "4k" (Veo 3.1/3.1-fast only, requires duration=8).
         aspect_ratio: "16:9" (landscape, default) or "9:16" (portrait).
-        audio: Generate native audio with the video (Veo 3+ only, requires Vertex AI config, default True).
+        audio: Generate native audio with the video (Veo 3+, default True). Includes sound effects and music.
         negative_prompt: What to exclude from the video (visual and audio).
         enhance_prompt: Let Google rewrite/enhance the prompt for better results (default True).
 

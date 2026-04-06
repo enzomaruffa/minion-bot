@@ -235,7 +235,10 @@ def generate_video(
     if image_path:
         gen_kwargs["image"] = Image.open(image_path)
 
-    logger.info(f"Starting video generation: model={model_id}, resolution={resolution}, duration={duration}s")
+    logger.info(
+        f"Starting video generation: model={model_id}, resolution={resolution}, "
+        f"duration={duration}s, vertex={is_vertex}, audio={config_kwargs.get('generate_audio', 'N/A')}"
+    )
     operation = client.models.generate_videos(**gen_kwargs)
 
     # Poll until done

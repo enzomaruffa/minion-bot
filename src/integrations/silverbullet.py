@@ -86,6 +86,21 @@ def note_exists(name: str) -> bool:
         return False
 
 
+def delete_note(name: str) -> None:
+    """Delete a note file.
+
+    Args:
+        name: Note name like "Journal/2024-01-15".
+
+    Raises:
+        ValueError: If the note doesn't exist.
+    """
+    path = _note_path(name)
+    if not path.is_file():
+        raise ValueError(f"Note not found: {name}")
+    path.unlink()
+
+
 def read_note(name: str) -> str:
     """Read a note's markdown content.
 

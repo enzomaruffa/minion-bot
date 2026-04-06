@@ -41,6 +41,8 @@ class Settings:
     heartbeat_daily_cap: int
     # MCP server commands
     mcp_server_commands: list[str]
+    # Google GenAI (Imagen, Veo, Nano Banana)
+    google_genai_api_key: str | None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -91,6 +93,9 @@ class Settings:
         mcp_cmds = os.environ.get("MCP_SERVER_COMMANDS", "")
         mcp_server_commands = [c.strip() for c in mcp_cmds.split(",") if c.strip()]
 
+        # Google GenAI
+        google_genai_api_key = os.environ.get("GOOGLE_API_KEY")
+
         return cls(
             telegram_bot_token=telegram_bot_token,
             telegram_user_id=int(telegram_user_id),
@@ -115,6 +120,7 @@ class Settings:
             heartbeat_max_notifications=heartbeat_max_notifications,
             heartbeat_daily_cap=heartbeat_daily_cap,
             mcp_server_commands=mcp_server_commands,
+            google_genai_api_key=google_genai_api_key,
         )
 
 

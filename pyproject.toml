@@ -24,6 +24,7 @@ dependencies = [
     "ddgs>=9.10.0",
     "python-pptx>=1.0.2",
     "agno>=2.5.7",
+    "google-genai>=1.70.0",
 ]
 
 [build-system]

@@ -43,6 +43,9 @@ class Settings:
     mcp_server_commands: list[str]
     # Google GenAI (Imagen, Veo, Nano Banana)
     google_genai_api_key: str | None
+    # Google Cloud / Vertex AI (needed for video audio generation)
+    google_cloud_project: str | None
+    google_cloud_location: str
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -96,6 +99,10 @@ class Settings:
         # Google GenAI
         google_genai_api_key = os.environ.get("GOOGLE_API_KEY")
 
+        # Google Cloud / Vertex AI
+        google_cloud_project = os.environ.get("GOOGLE_CLOUD_PROJECT")
+        google_cloud_location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
+
         return cls(
             telegram_bot_token=telegram_bot_token,
             telegram_user_id=int(telegram_user_id),
@@ -121,6 +128,8 @@ class Settings:
             heartbeat_daily_cap=heartbeat_daily_cap,
             mcp_server_commands=mcp_server_commands,
             google_genai_api_key=google_genai_api_key,
+            google_cloud_project=google_cloud_project,
+            google_cloud_location=google_cloud_location,
         )
 
 

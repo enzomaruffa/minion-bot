@@ -36,10 +36,11 @@ VIDEO_TIMEOUT = 360  # 6 minutes
 
 
 _client = None
+_vertex_client = None
 
 
 def _get_client():
-    """Lazy singleton GenAI client."""
+    """Lazy singleton GenAI client (Gemini API — uses API key)."""
     global _client
     if _client is None:
         from google import genai
@@ -48,6 +49,28 @@ def _get_client():
             raise ValueError("GOOGLE_API_KEY not configured")
         _client = genai.Client(api_key=settings.google_genai_api_key)
     return _client
+
+
+def _get_vertex_client():
+    """Lazy singleton Vertex AI client (supports audio generation).
+
+    Requires GOOGLE_CLOUD_PROJECT and GOOGLE_APPLICATION_CREDENTIALS env vars.
+    Falls back to the regular API key client if not configured.
+    """
+    global _vertex_client
+    if _vertex_client is None:
+        from google import genai
+
+        if settings.google_cloud_project:
+            _vertex_client = genai.Client(
+                vertexai=True,
+                project=settings.google_cloud_project,
+                location=settings.google_cloud_location,
+            )
+        else:
+            # Fall back to Gemini API client (no audio support)
+            _vertex_client = _get_client()
+    return _vertex_client
 
 
 def _ensure_media_dir() -> Path:
@@ -168,7 +191,9 @@ def generate_video(
     """
     from google.genai import types
 
-    client = _get_client()
+    # Use Vertex AI client for video (supports audio); falls back to Gemini API
+    client = _get_vertex_client()
+    is_vertex = settings.google_cloud_project is not None and settings.google_cloud_project != ""
 
     model_id = VEO_MODELS.get(model)
     if not model_id:
@@ -183,8 +208,8 @@ def generate_video(
         "number_of_videos": 1,
     }
 
-    # Audio support depends on model
-    if model in VEO_AUDIO_MODELS:
+    # generate_audio is only supported on Vertex AI
+    if is_vertex and model in VEO_AUDIO_MODELS:
         config_kwargs["generate_audio"] = audio
 
     if negative_prompt:

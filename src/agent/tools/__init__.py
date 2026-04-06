@@ -55,6 +55,7 @@ from .interests import (  # noqa: E402
     remove_interest,
     update_interest_tool,
 )
+from .media import edit_image, generate_image, generate_video  # noqa: E402
 from .memory import forget_memory, list_memories, recall_memory, save_memory  # noqa: E402
 from .mood import log_mood, mood_summary, show_mood_history  # noqa: E402
 from .notes import (  # noqa: E402
@@ -210,6 +211,10 @@ __all__ = [
     "task_nudge_dedup_key",
     # File tools
     "send_file",
+    # Media generation tools
+    "generate_image",
+    "edit_image",
+    "generate_video",
     # Memory tools
     "save_memory",
     "recall_memory",

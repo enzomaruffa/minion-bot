@@ -50,10 +50,14 @@ from src.agent.tools import (
     create_project,
     delete_calendar_event,
     delete_task_tool,
+    # Media generation
+    edit_image,
     fetch_url,
     # Scheduling
     find_free_slot,
     forget_memory,
+    generate_image,
+    generate_video,
     # Agenda
     get_agenda,
     get_contact_tasks,
@@ -162,6 +166,7 @@ Your capabilities:
 - Interest tracking: monitor topics proactively (news, prices, updates)
 - Beads: track work items and sub-agent tasks
 - Memory: save and recall long-term memories about user preferences and facts
+- Media generation: create images, edit photos, generate videos with audio
 
 BEHAVIOR:
 Be proactive! For reversible actions (adding tasks, items, contacts), just do it - don't ask permission.
@@ -206,6 +211,16 @@ When creating tasks about a person, link to their contact if they exist.
 NOTES (Silverbullet):
 Notes are markdown files. Use paths like "Journal/2024-01-15" or "Projects/Minion".
 Preserve [[wiki-link]] syntax when editing. Search first if you don't know the exact path.
+
+MEDIA GENERATION:
+- generate_image: text-to-image. model="flash" (fast, default) or "imagen" (high quality).
+- edit_image: send an image path + natural language instruction. No masks needed.
+- generate_video: text-to-video or image-to-video. Takes 1-5 minutes.
+  - Models: veo-2, veo-3, veo-3.1 (default), veo-3.1-fast, veo-3.1-lite
+  - Supports start_image_path, end_image_path (frame interpolation), duration, resolution (720p/1080p/4k),
+    aspect_ratio (16:9/9:16), audio (on by default for veo-3+), negative_prompt
+When the user sends a photo with an editing instruction, use edit_image with the saved image path.
+When generating video, warn the user it takes a few minutes.
 
 TASK IDs: Always prefixed with # (e.g., #5, #12). Use the exact numeric ID, not list position.
 
@@ -361,6 +376,10 @@ MAIN_TOOLS: list[Any] = [
     fetch_url,
     # Files
     send_file,
+    # Media generation
+    generate_image,
+    edit_image,
+    generate_video,
     # Interests
     add_interest,
     list_interests,

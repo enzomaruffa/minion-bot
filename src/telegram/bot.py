@@ -236,6 +236,18 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         file = await context.bot.get_file(photo.file_id)
         image_data = await file.download_as_bytearray()
 
+        # Save to disk so agent tools (edit_image, generate_video) can reference it
+        import os
+        from pathlib import Path
+
+        inbox_dir = Path("data/media/inbox")
+        inbox_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        saved_path = inbox_dir / f"photo_{timestamp}_{photo.file_unique_id}.jpg"
+        with open(saved_path, "wb") as f:
+            f.write(image_data)
+        abs_path = os.path.abspath(saved_path)
+
         # Analyze image
         analysis = extract_task_from_image(bytes(image_data))
         logger.info(f"Image analysis: {analysis[:50]}...")
@@ -243,12 +255,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         # Get caption if any
         caption = update.message.caption or ""
 
-        # Combine analysis with caption and process
-        message = f"I received an image. Analysis: {analysis}"
+        # Combine analysis with caption and include saved path for tools
+        message = f"I received an image (saved at {abs_path}). Analysis: {analysis}"
         if caption:
             message += f"\nCaption: {caption}"
 
-        await safe_reply(update.message, f"<i>Image analysis: {analysis[:200]}...</i>")
+        await safe_reply(update.message, "<i>Image received.</i>")
 
         response = await chat(message)
         await safe_reply(update.message, response)

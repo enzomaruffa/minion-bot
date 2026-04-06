@@ -218,7 +218,7 @@ def generate_video(
 
     # End frame for interpolation
     if last_frame_path:
-        config_kwargs["last_frame"] = Image.open(last_frame_path)
+        config_kwargs["last_frame"] = types.Image.from_file(location=last_frame_path)
 
     config = types.GenerateVideosConfig(**config_kwargs)
 
@@ -229,9 +229,9 @@ def generate_video(
         "config": config,
     }
 
-    # Start frame
+    # Start frame — must use types.Image (not PIL) for generate_videos
     if image_path:
-        gen_kwargs["image"] = Image.open(image_path)
+        gen_kwargs["image"] = types.Image.from_file(location=image_path)
 
     logger.info(f"Starting video generation: model={model_id}, resolution={resolution}, duration={duration}s")
     operation = client.models.generate_videos(**gen_kwargs)

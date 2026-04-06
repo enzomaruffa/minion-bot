@@ -82,12 +82,13 @@ async def eod_review() -> None:
             # Get tasks completed today
             done_tasks = list_tasks_by_status(session, TaskStatus.DONE)
             completed_today = [
-                t for t in done_tasks if t.updated_at and t.updated_at >= today_start.replace(tzinfo=None)
+                (t.id, t.title) for t in done_tasks if t.updated_at and t.updated_at >= today_start.replace(tzinfo=None)
             ]
 
             # Get incomplete tasks
             todo_tasks = list_tasks_by_status(session, TaskStatus.TODO)
-            in_progress = list_tasks_by_status(session, TaskStatus.IN_PROGRESS)
+            in_progress = [(t.id, t.title) for t in list_tasks_by_status(session, TaskStatus.IN_PROGRESS)]
+            todo_count = len(todo_tasks)
 
             # Tomorrow's agenda
             tomorrow = (now + timedelta(days=1)).strftime("%Y-%m-%d")
@@ -97,20 +98,20 @@ async def eod_review() -> None:
             today_naive = today_start.replace(tzinfo=None)
             mood_today = get_mood_log(session, today_naive)
 
-        # Build raw data for the agent
+        # Build raw data for the agent (using extracted scalars, not ORM objects)
         data_lines = []
 
         if completed_today:
             data_lines.append(f"Completed today ({len(completed_today)}):")
-            for t in completed_today[:10]:
-                data_lines.append(f"  - #{t.id}: {t.title}")
+            for tid, title in completed_today[:10]:
+                data_lines.append(f"  - #{tid}: {title}")
         else:
             data_lines.append("No tasks completed today.")
 
-        data_lines.append(f"\nPending: {len(todo_tasks)} todo, {len(in_progress)} in progress")
+        data_lines.append(f"\nPending: {todo_count} todo, {len(in_progress)} in progress")
         if in_progress:
-            for t in in_progress[:5]:
-                data_lines.append(f"  - #{t.id}: {t.title}")
+            for tid, title in in_progress[:5]:
+                data_lines.append(f"  - #{tid}: {title}")
 
         data_lines.append(f"\nTomorrow's agenda:\n{tomorrow_agenda}")
 
@@ -137,12 +138,12 @@ async def eod_review() -> None:
             lines = ["Good evening! Here's your daily review:", ""]
             if completed_today:
                 lines.append(f"Completed today ({len(completed_today)}):")
-                for t in completed_today[:5]:
-                    lines.append(f"  - {t.title}")
+                for _tid, title in completed_today[:5]:
+                    lines.append(f"  - {title}")
             else:
                 lines.append("No tasks completed today.")
             lines.append("")
-            incomplete = len(todo_tasks) + len(in_progress)
+            incomplete = todo_count + len(in_progress)
             if incomplete > 0:
                 lines.append(f"Still pending: {incomplete} task(s)")
             lines.append("")

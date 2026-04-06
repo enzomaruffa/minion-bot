@@ -25,7 +25,7 @@ VEO_MODELS = {
     "veo-3-fast": "veo-3.0-fast-generate-001",
     "veo-3.1": "veo-3.1-generate-preview",
     "veo-3.1-fast": "veo-3.1-fast-generate-preview",
-    "veo-3.1-lite": "veo-3.1-lite-generate-001",
+    "veo-3.1-lite": "veo-3.1-lite-generate-preview",
 }
 
 # Models that support native audio

@@ -37,7 +37,7 @@ def analyze_image(image_data: bytes, prompt: str = "Describe this image.") -> st
                 ],
             }
         ],
-        max_tokens=500,
+        max_completion_tokens=500,
     )
 
     return response.choices[0].message.content or ""

@@ -48,13 +48,17 @@ from src.agent.tools import (
     create_note_tool,
     # Projects
     create_project,
+    # Skills
+    create_skill,
     delete_calendar_event,
+    delete_skill,
     delete_task_tool,
     # Media generation
     edit_image,
     fetch_url,
     # Scheduling
     find_free_slot,
+    find_skill,
     forget_memory,
     generate_image,
     generate_video,
@@ -73,6 +77,7 @@ from src.agent.tools import (
     list_reading_list,
     list_recurring,
     list_reminders,
+    list_skills,
     list_tags,
     list_tasks,
     # Mood
@@ -83,6 +88,7 @@ from src.agent.tools import (
     move_task,
     purchase_item,
     read_note_tool,
+    read_skill,
     recall_memory,
     remind_before_deadline,
     remove_bookmark,
@@ -122,6 +128,7 @@ from src.agent.tools import (
     # Profile
     update_profile,
     update_project,
+    update_skill,
     update_task_tool,
     # Web
     web_search,
@@ -230,6 +237,16 @@ Map natural language to RRULE format:
 - "every Monday" -> FREQ=WEEKLY;BYDAY=MO
 - "every weekday" -> FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR
 - "every month on the 15th" -> FREQ=MONTHLY;BYMONTHDAY=15
+
+SKILLS:
+You have a skills system — .md files that teach you multi-step workflows.
+When a user asks you to DO something complex (deploy, plan, generate a report, etc.):
+1. Call find_skill(query) to check if a matching skill exists
+2. If found, call read_skill(name) for overview, then read_skill(name, section) for specific steps
+3. Follow the skill's instructions step by step
+4. If no skill matches, proceed normally and offer to create one for next time
+Use progressive disclosure: read only the section you need, execute it, then read the next.
+When the user teaches you a workflow ("remember how to X", "here's how you should X"), create a skill.
 
 CONSTANT LEARNING:
 When the user corrects you, expresses a preference, or you learn a fact:
@@ -394,6 +411,13 @@ MAIN_TOOLS: list[Any] = [
     recall_memory,
     list_memories,
     forget_memory,
+    # Skills
+    list_skills,
+    find_skill,
+    read_skill,
+    create_skill,
+    update_skill,
+    delete_skill,
 ]
 
 
@@ -462,6 +486,20 @@ def _build_system_prompt(format_hint: str) -> str:
                     result_preview = w.result[:150] if w.result else "(no result)"
                     lines.append(f"- {w.agent_name}: {w.description} -> {result_preview}")
                 parts.append("\n".join(lines))
+    except Exception:
+        pass
+
+    # Inject available skills summary (lightweight — just filenames, no reads)
+    try:
+        from src.integrations.silverbullet import list_notes_recursive
+
+        skill_notes = list_notes_recursive("Skills")
+        if skill_notes:
+            lines = ["\nAVAILABLE SKILLS:"]
+            for sn in skill_notes[:20]:
+                display_name = sn.replace("Skills/", "").removesuffix(".md")
+                lines.append(f"- {display_name}")
+            parts.append("\n".join(lines))
     except Exception:
         pass
 

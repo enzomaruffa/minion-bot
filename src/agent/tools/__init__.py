@@ -95,6 +95,14 @@ from .shopping import (  # noqa: E402
     show_list,
     uncheck_item,
 )
+from .skills import (  # noqa: E402
+    create_skill,
+    delete_skill,
+    find_skill,
+    list_skills,
+    read_skill,
+    update_skill,
+)
 from .tasks import (  # noqa: E402
     add_subtask,
     add_tasks,
@@ -220,4 +228,11 @@ __all__ = [
     "recall_memory",
     "list_memories",
     "forget_memory",
+    # Skills tools
+    "list_skills",
+    "find_skill",
+    "read_skill",
+    "create_skill",
+    "update_skill",
+    "delete_skill",
 ]

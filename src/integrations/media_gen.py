@@ -191,9 +191,8 @@ def generate_video(
     """
     from google.genai import types
 
-    # Use Vertex AI client for video (supports audio); falls back to Gemini API
-    client = _get_vertex_client()
-    is_vertex = settings.google_cloud_project is not None and settings.google_cloud_project != ""
+    # Use Gemini API client — Veo 3+ generates audio natively (always on, no param needed)
+    client = _get_client()
 
     model_id = VEO_MODELS.get(model)
     if not model_id:
@@ -208,9 +207,8 @@ def generate_video(
         "number_of_videos": 1,
     }
 
-    # generate_audio is only supported on Vertex AI
-    if is_vertex and model in VEO_AUDIO_MODELS:
-        config_kwargs["generate_audio"] = audio
+    # Veo 3+ generates audio natively on Gemini API (always on, no param).
+    # Don't pass generate_audio — it's not a valid param on Gemini API.
 
     if negative_prompt:
         config_kwargs["negative_prompt"] = negative_prompt
@@ -235,10 +233,7 @@ def generate_video(
     if image_path:
         gen_kwargs["image"] = Image.open(image_path)
 
-    logger.info(
-        f"Starting video generation: model={model_id}, resolution={resolution}, "
-        f"duration={duration}s, vertex={is_vertex}, audio={config_kwargs.get('generate_audio', 'N/A')}"
-    )
+    logger.info(f"Starting video generation: model={model_id}, resolution={resolution}, duration={duration}s")
     operation = client.models.generate_videos(**gen_kwargs)
 
     # Poll until done

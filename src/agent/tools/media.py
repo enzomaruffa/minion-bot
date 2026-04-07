@@ -75,21 +75,19 @@ def edit_image(image_paths: str, instruction: str) -> str:
 def generate_video(
     prompt: str,
     start_image_path: str = "",
-    end_image_path: str = "",
     duration: int = 8,
     resolution: str = "720p",
     aspect_ratio: str = "16:9",
     negative_prompt: str = "",
 ) -> str:
-    """Generate a video from a text prompt, optionally with start/end frame images.
+    """Generate a video from a text prompt, optionally from a start frame image.
 
-    Uses veo-3.1-lite (fast, cheap, has audio). Supports text-to-video, image-to-video
-    (start frame), and frame interpolation (start + end frames). Takes 1-5 minutes.
+    Uses veo-3.1-lite (fast, cheap, has native audio). Takes 1-5 minutes.
+    Audio is always generated — describe sounds/dialogue in the prompt for best results.
 
     Args:
-        prompt: Text description of the video to generate.
+        prompt: Text description of the video to generate. Include dialogue in quotes.
         start_image_path: Optional path to starting frame image for image-to-video.
-        end_image_path: Optional path to ending frame image for frame interpolation.
         duration: Video duration in seconds (4, 6, or 8). Default 8.
         resolution: "720p" (default) or "1080p" (requires duration=8).
         aspect_ratio: "16:9" (landscape, default) or "9:16" (portrait).
@@ -112,7 +110,6 @@ def generate_video(
         path = _generate_video(
             prompt=prompt,
             image_path=start_image_path or None,
-            last_frame_path=end_image_path or None,
             model="veo-3.1-lite",
             duration=duration,
             resolution=resolution,

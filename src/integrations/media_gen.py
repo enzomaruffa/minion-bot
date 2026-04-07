@@ -156,7 +156,6 @@ def generate_image_imagen(prompt: str) -> str:
 def generate_video(
     prompt: str,
     image_path: str | None = None,
-    last_frame_path: str | None = None,
     model: str = "veo-3.1-lite",
     duration: int = 8,
     resolution: str = "720p",
@@ -167,8 +166,7 @@ def generate_video(
 
     Args:
         prompt: Video description. Include dialogue in quotes and describe sounds for audio.
-        image_path: Optional start frame image path.
-        last_frame_path: Optional end frame image path (frame interpolation).
+        image_path: Optional start frame image path (image-to-video).
         model: Model alias. Only "veo-3.1-lite" is available.
         duration: Duration in seconds (4, 6, or 8). Default 8.
         resolution: "720p" (default) or "1080p" (requires duration=8).
@@ -201,10 +199,6 @@ def generate_video(
 
     if negative_prompt:
         config_kwargs["negative_prompt"] = negative_prompt
-
-    # End frame for interpolation
-    if last_frame_path:
-        config_kwargs["last_frame"] = types.Image.from_file(location=last_frame_path)
 
     config = types.GenerateVideosConfig(**config_kwargs)
 

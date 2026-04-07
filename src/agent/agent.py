@@ -233,12 +233,13 @@ MEDIA GENERATION:
 - edit_image: send an image path + natural language instruction. No masks needed.
 - generate_video: text-to-video or image-to-video using veo-3.1-lite. Takes 1-5 minutes.
   - Audio is always generated automatically. Describe sounds/dialogue in the prompt.
-  - Supports start_image_path, end_image_path (frame interpolation), duration (4/6/8s),
+  - Supports start_image_path (NO end image), duration (4/6/8s),
     resolution (720p/1080p), aspect_ratio (16:9/9:16), negative_prompt
 When the user sends a photo with an editing instruction, use edit_image with the saved image path.
 When generating video, warn the user it takes a few minutes.
-If media generation fails, retry silently with a different model or simpler params.
-Do NOT present long option lists — just pick the best fallback and try again. Keep errors short.
+CRITICAL: If media generation fails, just retry with simpler params or tell the user it failed in ONE short sentence.
+NEVER present option lists (A/B/C), NEVER explain workarounds, NEVER ask "what would you like to do instead".
+Just act or give a brief error. The user does not want to debug API errors with you.
 
 VIDEO EDITING (FFmpeg):
 - trim_video: cut a clip to a time range (start/end or start/duration)

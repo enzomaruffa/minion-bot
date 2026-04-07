@@ -40,6 +40,16 @@ from .contacts import (  # noqa: E402
     upcoming_birthdays,
     update_contact_tool,
 )
+from .ffmpeg import (  # noqa: E402
+    add_audio,
+    add_text_overlay,
+    concat_videos,
+    extract_audio,
+    probe_media,
+    resize_video,
+    speed_video,
+    trim_video,
+)
 from .files import send_file  # noqa: E402
 from .heartbeat_tools import (  # noqa: E402
     check_dedup,
@@ -219,6 +229,15 @@ __all__ = [
     "task_nudge_dedup_key",
     # File tools
     "send_file",
+    # FFmpeg tools
+    "trim_video",
+    "concat_videos",
+    "add_audio",
+    "extract_audio",
+    "resize_video",
+    "speed_video",
+    "add_text_overlay",
+    "probe_media",
     # Media generation tools
     "generate_image",
     "edit_image",

@@ -21,6 +21,8 @@ from agno.team.team import TeamMode
 from src.agent.memory_extractor import extract_memories_background
 from src.agent.team import build_team_members
 from src.agent.tools import (
+    # FFmpeg
+    add_audio,
     # Contacts
     add_contact,
     # Interests
@@ -28,6 +30,7 @@ from src.agent.tools import (
     add_subtask,
     # Tasks
     add_tasks,
+    add_text_overlay,
     # Shopping
     add_to_list,
     append_to_note_tool,
@@ -44,6 +47,7 @@ from src.agent.tools import (
     check_item,
     clear_checked,
     complete_task,
+    concat_videos,
     create_calendar_event,
     create_note_tool,
     # Projects
@@ -55,6 +59,7 @@ from src.agent.tools import (
     delete_task_tool,
     # Media generation
     edit_image,
+    extract_audio,
     fetch_url,
     # Scheduling
     find_free_slot,
@@ -86,6 +91,7 @@ from src.agent.tools import (
     mood_summary,
     move_project_tasks,
     move_task,
+    probe_media,
     purchase_item,
     read_note_tool,
     read_skill,
@@ -95,6 +101,7 @@ from src.agent.tools import (
     remove_contact,
     remove_interest,
     remove_item,
+    resize_video,
     # Code
     run_python_code,
     run_shell_command,
@@ -115,9 +122,11 @@ from src.agent.tools import (
     show_mood_history,
     show_profile,
     show_project,
+    speed_video,
     stop_recurring,
     # Calendar
     test_calendar,
+    trim_video,
     unassign_from_project,
     uncheck_item,
     upcoming_birthdays,
@@ -230,6 +239,18 @@ When the user sends a photo with an editing instruction, use edit_image with the
 When generating video, warn the user it takes a few minutes.
 If media generation fails, retry silently with a different model or simpler params.
 Do NOT present long option lists — just pick the best fallback and try again. Keep errors short.
+
+VIDEO EDITING (FFmpeg):
+- trim_video: cut a clip to a time range (start/end or start/duration)
+- concat_videos: stitch multiple videos together (with optional crossfade)
+- add_audio: add or mix an audio track onto a video
+- extract_audio: rip audio from a video (mp3/wav/m4a)
+- resize_video: change resolution (480p/720p/1080p/4k)
+- speed_video: speed up or slow down (e.g., 2.0 = 2x, 0.5 = half speed)
+- add_text_overlay: burn text onto video (position, timing, color)
+- probe_media: inspect file details (duration, resolution, codecs)
+All output files are saved to data/media/. Use send_file to deliver results.
+Chain these tools for complex edits (e.g., trim + concat + add audio).
 
 TASK IDs: Always prefixed with # (e.g., #5, #12). Use the exact numeric ID, not list position.
 
@@ -399,6 +420,15 @@ MAIN_TOOLS: list[Any] = [
     generate_image,
     edit_image,
     generate_video,
+    # FFmpeg / video editing
+    trim_video,
+    concat_videos,
+    add_audio,
+    extract_audio,
+    resize_video,
+    speed_video,
+    add_text_overlay,
+    probe_media,
     # Interests
     add_interest,
     list_interests,

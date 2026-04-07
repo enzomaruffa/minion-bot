@@ -231,10 +231,10 @@ Preserve [[wiki-link]] syntax when editing. Search first if you don't know the e
 MEDIA GENERATION:
 - generate_image: text-to-image. model="flash" (fast, default) or "imagen" (high quality).
 - edit_image: send an image path + natural language instruction. No masks needed.
-- generate_video: text-to-video or image-to-video. Takes 1-5 minutes.
-  - Models: veo-3.1-lite (default, fast, has audio), veo-2, veo-3, veo-3.1, veo-3.1-fast
-  - Supports start_image_path, end_image_path (frame interpolation), duration, resolution (720p/1080p/4k),
-    aspect_ratio (16:9/9:16), audio (on by default for veo-3+), negative_prompt
+- generate_video: text-to-video or image-to-video using veo-3.1-lite. Takes 1-5 minutes.
+  - Audio is always generated automatically. Describe sounds/dialogue in the prompt.
+  - Supports start_image_path, end_image_path (frame interpolation), duration (4/6/8s),
+    resolution (720p/1080p), aspect_ratio (16:9/9:16), negative_prompt
 When the user sends a photo with an editing instruction, use edit_image with the saved image path.
 When generating video, warn the user it takes a few minutes.
 If media generation fails, retry silently with a different model or simpler params.

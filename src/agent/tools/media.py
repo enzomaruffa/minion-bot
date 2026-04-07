@@ -74,34 +74,26 @@ def edit_image(image_paths: str, instruction: str) -> str:
 
 def generate_video(
     prompt: str,
-    model: str = "veo-3.1-lite",
     start_image_path: str = "",
     end_image_path: str = "",
     duration: int = 8,
     resolution: str = "720p",
     aspect_ratio: str = "16:9",
-    audio: bool = True,
     negative_prompt: str = "",
-    enhance_prompt: bool = True,
 ) -> str:
     """Generate a video from a text prompt, optionally with start/end frame images.
 
-    Supports text-to-video, image-to-video (start frame), and frame interpolation (start + end frames).
-    Video generation takes 1-5 minutes depending on settings.
+    Uses veo-3.1-lite (fast, cheap, has audio). Supports text-to-video, image-to-video
+    (start frame), and frame interpolation (start + end frames). Takes 1-5 minutes.
 
     Args:
         prompt: Text description of the video to generate.
-        model: Video model to use. Options: "veo-2", "veo-3", "veo-3-fast", "veo-3.1" (default),
-            "veo-3.1-fast", "veo-3.1-lite".
         start_image_path: Optional path to starting frame image for image-to-video.
         end_image_path: Optional path to ending frame image for frame interpolation.
-        duration: Video duration in seconds. Veo 2 supports 5-8, Veo 3+ supports 4/6/8. Default 8.
-        resolution: Video resolution. "720p" (default, all models), "1080p" (Veo 3+, requires duration=8),
-            "4k" (Veo 3.1/3.1-fast only, requires duration=8).
+        duration: Video duration in seconds (4, 6, or 8). Default 8.
+        resolution: "720p" (default) or "1080p" (requires duration=8).
         aspect_ratio: "16:9" (landscape, default) or "9:16" (portrait).
-        audio: Unused — Veo 3+ generates audio automatically (always on). Kept for API compatibility.
         negative_prompt: What to exclude from the video (visual and audio).
-        enhance_prompt: Let Google rewrite/enhance the prompt for better results (default True).
 
     Returns:
         Confirmation message after sending the generated video.
@@ -121,13 +113,11 @@ def generate_video(
             prompt=prompt,
             image_path=start_image_path or None,
             last_frame_path=end_image_path or None,
-            model=model,
+            model="veo-3.1-lite",
             duration=duration,
             resolution=resolution,
             aspect_ratio=aspect_ratio,
-            audio=audio,
             negative_prompt=negative_prompt or None,
-            enhance_prompt=enhance_prompt,
         )
 
         caption = f"Generated: {prompt[:180]}"

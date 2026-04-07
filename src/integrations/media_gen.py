@@ -20,16 +20,11 @@ logger = logging.getLogger(__name__)
 MEDIA_DIR = Path("data/media")
 
 VEO_MODELS = {
-    "veo-2": "veo-2.0-generate-001",
-    "veo-3": "veo-3.0-generate-001",
-    "veo-3-fast": "veo-3.0-fast-generate-001",
-    "veo-3.1": "veo-3.1-generate-preview",
-    "veo-3.1-fast": "veo-3.1-fast-generate-preview",
     "veo-3.1-lite": "veo-3.1-lite-generate-preview",
 }
 
 # Models that support native audio
-VEO_AUDIO_MODELS = {"veo-3", "veo-3-fast", "veo-3.1", "veo-3.1-fast", "veo-3.1-lite"}
+VEO_AUDIO_MODELS = {"veo-3.1-lite"}
 
 VIDEO_POLL_INTERVAL = 10  # seconds
 VIDEO_TIMEOUT = 360  # 6 minutes
@@ -162,29 +157,23 @@ def generate_video(
     prompt: str,
     image_path: str | None = None,
     last_frame_path: str | None = None,
-    model: str = "veo-3.1",
+    model: str = "veo-3.1-lite",
     duration: int = 8,
     resolution: str = "720p",
     aspect_ratio: str = "16:9",
-    audio: bool = True,
     negative_prompt: str | None = None,
-    enhance_prompt: bool = True,
-    seed: int | None = None,
 ) -> str:
-    """Generate a video using Veo.
+    """Generate a video using Veo 3.1 Lite.
 
     Args:
-        prompt: Video description.
+        prompt: Video description. Include dialogue in quotes and describe sounds for audio.
         image_path: Optional start frame image path.
         last_frame_path: Optional end frame image path (frame interpolation).
-        model: Model alias (veo-2, veo-3, veo-3.1, veo-3.1-fast, veo-3.1-lite).
-        duration: Duration in seconds (4-8, model-dependent).
-        resolution: "720p", "1080p", or "4k" (model-dependent).
+        model: Model alias. Only "veo-3.1-lite" is available.
+        duration: Duration in seconds (4, 6, or 8). Default 8.
+        resolution: "720p" (default) or "1080p" (requires duration=8).
         aspect_ratio: "16:9" or "9:16".
-        audio: Generate native audio (Veo 3+ only).
         negative_prompt: What to exclude from output.
-        enhance_prompt: Let Google enhance the prompt.
-        seed: Determinism seed (Veo 3 only).
 
     Returns:
         Path to saved output video.
@@ -210,14 +199,8 @@ def generate_video(
     if duration != 8:
         config_kwargs["duration_seconds"] = duration
 
-    # enhance_prompt is not supported by all models — only include if explicitly set
-    # Veo 3+ generates audio natively on Gemini API (always on, no param).
-
     if negative_prompt:
         config_kwargs["negative_prompt"] = negative_prompt
-
-    if seed is not None:
-        config_kwargs["seed"] = seed
 
     # End frame for interpolation
     if last_frame_path:

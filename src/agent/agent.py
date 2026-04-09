@@ -643,37 +643,42 @@ async def chat_stream(message: str, format_hint: str = "telegram"):
     full_text = ""
 
     try:
-        async for event in team.arun(
-            message,
-            session_id=SESSION_ID,
-            stream=True,
-            stream_events=True,
-        ):
-            # Team final content
-            if event.event == TeamRunEvent.run_content:
-                chunk = event.content or ""
-                if chunk:
-                    full_text += chunk
-                    yield ("text", chunk)
+        async with asyncio.timeout(AGENT_TIMEOUT):
+            async for event in team.arun(
+                message,
+                session_id=SESSION_ID,
+                stream=True,
+                stream_events=True,
+            ):
+                # Team final content
+                if event.event == TeamRunEvent.run_content:
+                    chunk = event.content or ""
+                    if chunk:
+                        full_text += chunk
+                        yield ("text", chunk)
 
-            # Team-level tool call
-            elif event.event == TeamRunEvent.tool_call_started:
-                tool_obj = getattr(event, "tool", None)
-                tool_name = tool_obj.tool_name if tool_obj else "unknown"
-                yield ("tool_call", tool_name)
+                # Team-level tool call
+                elif event.event == TeamRunEvent.tool_call_started:
+                    tool_obj = getattr(event, "tool", None)
+                    tool_name = tool_obj.tool_name if tool_obj else "unknown"
+                    yield ("tool_call", tool_name)
 
-            # Member-level tool call
-            elif event.event == RunEvent.tool_call_started:
-                tool_obj = getattr(event, "tool", None)
-                tool_name = tool_obj.tool_name if tool_obj else "unknown"
-                agent_id = getattr(event, "agent_id", "")
-                label = f"{agent_id}: {tool_name}" if agent_id else tool_name
-                yield ("tool_call", label)
+                # Member-level tool call
+                elif event.event == RunEvent.tool_call_started:
+                    tool_obj = getattr(event, "tool", None)
+                    tool_name = tool_obj.tool_name if tool_obj else "unknown"
+                    agent_id = getattr(event, "agent_id", "")
+                    label = f"{agent_id}: {tool_name}" if agent_id else tool_name
+                    yield ("tool_call", label)
 
-            # Team run completed
-            elif event.event == TeamRunEvent.run_completed:
-                yield ("result", "")
+                # Team run completed
+                elif event.event == TeamRunEvent.run_completed:
+                    yield ("result", "")
 
+    except TimeoutError:
+        logger.error("chat_stream() timed out after %d seconds", AGENT_TIMEOUT)
+        yield ("text", f"\n\n(Timed out after {AGENT_TIMEOUT // 60} minutes)")
+        yield ("result", "")
     except GeneratorExit:
         logger.info("chat_stream GeneratorExit")
         return

@@ -208,8 +208,13 @@ def _build_recent_actions() -> str:
         return "\n".join(lines)
 
 
+HEARTBEAT_TIMEOUT = 300  # 5 minutes — hard cap so a hung tool can't freeze the bot
+
+
 async def _run_heartbeat_agno(prompt: str) -> str | None:
-    """Run a heartbeat cycle using an Agno Agent."""
+    """Run a heartbeat cycle using an Agno Agent (with timeout)."""
+    import asyncio
+
     from agno.agent import Agent
     from agno.models.openai import OpenAIChat
 
@@ -276,7 +281,8 @@ async def _run_heartbeat_agno(prompt: str) -> str | None:
         telemetry=False,
     )
 
-    response = await agent.arun(prompt)
+    async with asyncio.timeout(HEARTBEAT_TIMEOUT):
+        response = await agent.arun(prompt)
     return response.content if response and response.content else None
 
 
@@ -325,5 +331,7 @@ async def run_heartbeat() -> None:
 
         logger.info(f"Heartbeat complete: {response_content[:100] if response_content else '(no output)'}...")
 
+    except TimeoutError:
+        logger.error(f"Heartbeat timed out after {HEARTBEAT_TIMEOUT}s — skipping this cycle")
     except Exception as e:
         logger.exception(f"Heartbeat failed: {e}")
